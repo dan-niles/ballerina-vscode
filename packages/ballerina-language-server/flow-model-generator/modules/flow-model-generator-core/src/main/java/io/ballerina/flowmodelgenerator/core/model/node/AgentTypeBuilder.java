@@ -68,6 +68,7 @@ public class AgentTypeBuilder extends ClassInitBuilder {
             Project project = PackageUtil.loadProject(resolvedContext.workspaceManager(),
                     resolvedContext.filePath());
             AiUtils.markClientConnectionParams(this, resolvedContext.codedata(), project);
+            AiUtils.markAgentParams(this, resolvedContext.codedata(), project);
         } catch (Throwable t) {
             // Best-effort: client params keep their default expression editor.
         }

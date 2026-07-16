@@ -63,6 +63,7 @@ import {
     DropdownType,
     isDropDownType,
     InputType,
+    CodeData,
 } from "@wso2/ballerina-core";
 import {
     HelperPaneVariableInfo,
@@ -371,6 +372,17 @@ function isInlineExpressionValue(value: unknown): boolean {
     return typeof value === "string" && value.trim() !== "" && !/^[a-zA-Z_][a-zA-Z0-9_']*$/.test(value.trim());
 }
 
+// "Pick an existing / create new" fields (connection, memory, agent) open Select-first: a bare identifier is an
+// existing variable (Select, kept); empty, the nil `()`, or a synthesized `new (...)` default means "nothing chosen
+// yet" (Select, cleared); only a genuine hand-authored expression opens in Expression mode (kept).
+function normalizeConnectionSelectValue(value: unknown): { value: string; expressionMode: boolean } {
+    const raw = typeof value === "string" ? value.trim() : "";
+    if (raw === "" || raw === "()" || /^(check\s+)?new\b/.test(raw)) {
+        return { value: "", expressionMode: false };
+    }
+    return { value: raw, expressionMode: isInlineExpressionValue(raw) };
+}
+
 // Render an editable ai:ModelProvider field as the connection-select editor (dropdown + Select/Expression toggle).
 function enrichModelProviderField(formField: FormField, property: Property): void {
     const isModelProvider = property.types?.some((t) => t.ballerinaType === AI_MODEL_PROVIDER_TYPE);
@@ -420,7 +432,8 @@ function enrichClientConnectionField(formField: FormField, property: Property): 
     }
     const typeQuery = getConnectionTypeQuery(property);
     const ballerinaType = property.types?.find((type) => type.ballerinaType)?.ballerinaType;
-    const expressionMode = isInlineExpressionValue(formField.value);
+    const { value, expressionMode } = normalizeConnectionSelectValue(formField.value);
+    formField.value = value;
     formField.type = expressionMode ? "EXPRESSION" : "ACTION_EXPRESSION";
     formField.types = [
         { fieldType: "ACTION_EXPRESSION", ballerinaType, selected: !expressionMode },
@@ -436,20 +449,59 @@ function enrichClientConnectionField(formField: FormField, property: Property): 
 const AI_MEMORY_TYPE = "ai:Memory";
 const MEMORY_SEARCH_KIND = "MEMORY";
 
+// The agent-definition template declares memory as `ai:Memory? memory = ()`, so the type arrives nilable — strip a
+// trailing `?` before matching.
+const stripNil = (type?: string): string | undefined => (type?.endsWith("?") ? type.slice(0, -1) : type);
+
 // Render an editable ai:Memory field as the connection-select editor (dropdown of existing memory variables +
 // Create New). Mirrors enrichModelProviderField; the "Create New Memory" action is handled by useCreateConnection.
 function enrichMemoryField(formField: FormField, property: Property): void {
-    const isMemory = property.types?.some((t) => t.ballerinaType === AI_MEMORY_TYPE);
+    const isMemory = property.types?.some((t) => stripNil(t.ballerinaType) === AI_MEMORY_TYPE);
     if (!isMemory || !formField.editable) {
         return;
     }
-    const expressionMode = isInlineExpressionValue(formField.value);
+    const { value, expressionMode } = normalizeConnectionSelectValue(formField.value);
+    formField.value = value;
     formField.type = expressionMode ? "EXPRESSION" : "ACTION_EXPRESSION";
     formField.types = [
         { fieldType: "ACTION_EXPRESSION", ballerinaType: AI_MEMORY_TYPE, selected: !expressionMode },
         { fieldType: "EXPRESSION", selected: expressionMode },
     ] as InputType[];
     formField.codedata = { ...(formField.codedata || {}), searchNodesKind: MEMORY_SEARCH_KIND };
+}
+
+const AGENT_PARAM_DATA_KEY = "agent";
+
+// Render an agent-typed init param (LS marks it via codedata.data.agent) as the connection-select editor: a dropdown
+// of existing agents of the required type + Create New. The LS stamps the agent's node kind (AGENT for built-in
+// ai:Agent, AGENT_TYPE for custom classes) and type coordinates; we filter the dropdown to that type by subtype.
+function enrichAgentField(formField: FormField, property: Property): void {
+    const agent = property.codedata?.data?.[AGENT_PARAM_DATA_KEY] as CodeData | undefined;
+    if (!agent || !formField.editable) {
+        return;
+    }
+    const searchNodesKind = agent.node; // "AGENT" | "AGENT_TYPE"
+    if (!searchNodesKind) {
+        return;
+    }
+    const ballerinaType = property.types?.find((type) => type.ballerinaType)?.ballerinaType;
+    const { value, expressionMode } = normalizeConnectionSelectValue(formField.value);
+    formField.value = value;
+    formField.type = expressionMode ? "EXPRESSION" : "ACTION_EXPRESSION";
+    formField.types = [
+        { fieldType: "ACTION_EXPRESSION", ballerinaType, selected: !expressionMode },
+        { fieldType: "EXPRESSION", selected: expressionMode },
+    ] as InputType[];
+    formField.codedata = {
+        ...(formField.codedata || {}),
+        searchNodesKind,
+        typeMatch: "subtype",
+        ...(agent.org && { typeOrg: agent.org }),
+        ...(agent.packageName && { typePackage: agent.packageName }),
+        ...(agent.module && { typeModule: agent.module }),
+        ...(agent.object && { typeName: agent.object }),
+        ...(agent.version && { typeVersion: agent.version }),
+    };
 }
 
 export function convertNodePropertyToFormField(
@@ -484,6 +536,7 @@ export function convertNodePropertyToFormField(
     enrichModelProviderField(formField, property);
     enrichClientConnectionField(formField, property);
     enrichMemoryField(formField, property);
+    enrichAgentField(formField, property);
     return formField;
 }
 
