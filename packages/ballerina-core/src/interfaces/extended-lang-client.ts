@@ -1427,6 +1427,49 @@ export interface AddFieldRequest {
     };
 }
 
+// Constructor-injected input: a field wired from a new `init` parameter (self.<name> = <name>).
+export interface AddInitParameterRequest {
+    filePath: string;
+    field: FieldType;
+    codedata: {
+        lineRange: LineRange;
+    };
+}
+
+// Configured connector stored as a class field and initialized inside the agent definition's init method.
+export interface ClassOwnedNodeWiring {
+    kind: "INNER_AGENT_TOOLS";
+}
+
+export interface ClassOwnedNodeCleanup {
+    generatedHelperClass?: boolean;
+}
+
+export interface ClassOwnedNodeRequest {
+    filePath: string;
+    classLineRange: LineRange;
+}
+
+export interface ClassOwnedNodeSourceRequest {
+    filePath: string;
+    flowNode: FlowNode;
+    classLineRange: LineRange;
+    wiring?: ClassOwnedNodeWiring;
+}
+
+export interface ClassOwnedNodeDeleteRequest {
+    filePath: string;
+    fieldName: string;
+    classLineRange: LineRange;
+    wiring?: ClassOwnedNodeWiring;
+    cleanup?: ClassOwnedNodeCleanup;
+}
+
+export interface ClassInitParameterModifierRequest {
+    filePath: string;
+    field: FieldType;
+}
+
 export interface ExpressionTokensRequest {
     expression: string;
     filePath: string;
@@ -1920,12 +1963,28 @@ export interface AIGentToolsResponse {
     };
 }
 
-export interface GenAgentToolRequest {
+export interface GenAgentDefinitionRequest {
     filePath: string;
-    agentVarName: string;
-    includeContext: boolean;
-    toolName: string;
+    name: string;
     description: string;
+}
+
+/**
+ * Creates a library package in the current Ballerina workspace and adds an
+ * agent definition to it. This is handled by the extension because package
+ * creation and definition generation must complete as one operation.
+ */
+export interface CreateLibraryAgentDefinitionRequest extends Omit<GenAgentDefinitionRequest, "filePath"> {
+    sourceProjectPath: string;
+    libraryName: string;
+    packageName: string;
+    orgName?: string;
+    orgHandle?: string;
+    version?: string;
+}
+
+export interface CreateLibraryAgentDefinitionResponse extends AIGentToolsResponse {
+    projectPath: string;
 }
 
 export interface AIGetPackageVersionRequest {
@@ -2032,6 +2091,7 @@ export enum ARTIFACT_TYPE {
     Workflows = "Workflows",
     Connections = "Connections",
     Agents = "Agents",
+    AgentDefinitions = "Agent Definitions",
     Listeners = "Listeners",
     EntryPoints = "Entry Points",
     Types = "Types",
@@ -2051,6 +2111,7 @@ export interface Artifacts {
     [ARTIFACT_TYPE.Workflows]?: Record<string, BaseArtifact>;
     [ARTIFACT_TYPE.Connections]: Record<string, BaseArtifact>;
     [ARTIFACT_TYPE.Agents]: Record<string, BaseArtifact>;
+    [ARTIFACT_TYPE.AgentDefinitions]: Record<string, BaseArtifact>;
     [ARTIFACT_TYPE.Listeners]: Record<string, BaseArtifact>;
     [ARTIFACT_TYPE.EntryPoints]: Record<string, BaseArtifact>;
     [ARTIFACT_TYPE.Types]: Record<string, BaseArtifact>;

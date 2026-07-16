@@ -16,13 +16,18 @@
  *  under the License.
  */
 
-package io.ballerina.flowmodelgenerator.extension.request;
+package io.ballerina.servicemodelgenerator.extension.model.request;
+
+import io.ballerina.servicemodelgenerator.extension.model.Codedata;
+import io.ballerina.servicemodelgenerator.extension.model.Field;
 
 /**
- * A request to generate an {@code @ai:AgentTool} wrapper that delegates to another agent's {@code run} method.
+ * Request to add a constructor-injected input to a class: a new {@code init} parameter, a field, and the
+ * {@code self.<name> = <name>} assignment wiring them together.
  *
- * @since 1.0.0
+ * @param filePath The path of the file containing the class.
+ * @param field    The input to add (name + type + optional default value).
+ * @param codedata The code data locating the target class definition.
  */
-public record GenAgentToolRequest(String filePath, String agentVarName, boolean includeContext, String toolName,
-                                  String description) {
+public record AddInitParameterRequest(String filePath, Field field, Codedata codedata) {
 }

@@ -33,8 +33,13 @@ export const FormContainer = styled.div`
     min-height: 0;
     display: flex;
     flex-direction: column;
+    overflow-y: auto;
+    padding: 16px 20px;
+`;
+
+export const AgentDefinitionFormContainer = styled(FormContainer)`
     overflow: hidden;
-    padding: 16px 20px 0;
+    padding: 0;
 `;
 
 export const LoaderWrapper = styled.div`
@@ -212,4 +217,3 @@ export const AgentsGrid = styled.div`
     gap: 12px;
     margin-top: 8px;
 `;
-

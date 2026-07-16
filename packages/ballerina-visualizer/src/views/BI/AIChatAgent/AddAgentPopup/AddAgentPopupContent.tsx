@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Codicon, Icon } from "@wso2/ui-toolkit";
 import { ConnectorIcon } from "@wso2/bi-diagram";
 import { AvailableNode, EVENT_TYPE, FlowNode, LineRange } from "@wso2/ballerina-core";
@@ -26,8 +26,10 @@ import ButtonCard from "../../../../components/ButtonCard";
 import { RelativeLoader } from "../../../../components/RelativeLoader";
 import { FlowNodeForm } from "../../Forms/FlowNodeForm";
 import { fetchAgentNodeTemplate, getEndOfFileLineRange, getNodeTemplate } from "../utils";
+import { AgentDefinitionForm } from "../AgentDefinitionForm";
 import { AgentInfoCard } from "./AgentInfoCard";
 import {
+    AgentDefinitionFormContainer,
     AgentOptionCard,
     AgentOptionContent,
     AgentOptionDescription,
@@ -52,21 +54,23 @@ import {
     StyledSearchBox,
 } from "./styles";
 
-// Pre-built agent declarations are written to the project's dedicated agents file.
 const AGENT_FILE_NAME = "agents.bal";
 
 type AgentFilter = "All" | "Project" | "Organization";
-// "create" = custom agent form inline; "configure" = initialize a selected pre-built agent.
-export type AddAgentView = "gallery" | "configure" | "create";
+export type AddAgentView = "gallery" | "configure" | "create" | "createDefinition";
 
 export interface AddAgentPopupContentProps {
     projectPath: string;
     onClose?: () => void;
     view: AddAgentView;
     onViewChange: (view: AddAgentView) => void;
-    // When opened from inside a flow: skip the focus-diagram redirect and call onAgentCreated instead.
+    pendingAgent?: AvailableNode;
+    onPendingAgentChange: (agent: AvailableNode | undefined) => void;
     inFlow?: boolean;
     onAgentCreated?: (agentVarName: string) => void;
+    dependencyMode?: boolean;
+    onAgentSelectedForDependency?: (agent: AvailableNode) => void;
+    onGenericAgentSelected?: () => void;
 }
 
 // Maps a UI filter tab to the backend AgentSearchCommand `source` parameter.
@@ -77,13 +81,24 @@ const FILTER_TO_SOURCE: Record<AgentFilter, string> = {
 };
 
 export function AddAgentPopupContent(props: AddAgentPopupContentProps) {
-    const { projectPath, onClose, view, onViewChange, inFlow, onAgentCreated } = props;
+    const {
+        projectPath,
+        onClose,
+        view,
+        onViewChange,
+        pendingAgent,
+        onPendingAgentChange,
+        inFlow,
+        onAgentCreated,
+        dependencyMode,
+        onAgentSelectedForDependency,
+        onGenericAgentSelected,
+    } = props;
     const { rpcClient } = useRpcContext();
     const [searchText, setSearchText] = useState<string>("");
     const [filterType, setFilterType] = useState<AgentFilter>("All");
     const [agents, setAgents] = useState<AvailableNode[]>([]);
     const [isSearching, setIsSearching] = useState<boolean>(false);
-    // "Project" agents come from sibling projects in the workspace, so the tab is only relevant in a workspace.
     const [isWorkspace, setIsWorkspace] = useState<boolean>(false);
 
     useEffect(() => {
@@ -98,7 +113,6 @@ export function AddAgentPopupContent(props: AddAgentPopupContentProps) {
                 );
             })
             .catch(() => {
-                // Treat detection failures as a single project (hide the Project tab).
             });
         return () => {
             cancelled = true;
@@ -109,10 +123,7 @@ export function AddAgentPopupContent(props: AddAgentPopupContentProps) {
     const [agentFilePath, setAgentFilePath] = useState<string>("");
     const [targetLineRange, setTargetLineRange] = useState<LineRange>();
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-    // The pre-built agent selected from the gallery, configured in the "configure" view.
-    const [pendingAgent, setPendingAgent] = useState<AvailableNode>();
 
-    // Load agent template for the "configure" and "create" views. Reset otherwise.
     useEffect(() => {
         if ((view !== "configure" && view !== "create") || (view === "configure" && !pendingAgent)) {
             setAgentNode(undefined);
@@ -126,9 +137,6 @@ export function AddAgentPopupContent(props: AddAgentPopupContentProps) {
                 const endOfFile = await getEndOfFileLineRange(AGENT_FILE_NAME, rpcClient);
                 let template: FlowNode;
                 if (view === "configure") {
-                    // Resolve the target file (agents.bal) first and use it as the template context: passing the
-                    // project directory breaks symbol resolution (no unique result name) and crashes same-package
-                    // creation (documentId on a directory). The file may not exist yet — the LS tolerates that.
                     template = await getNodeTemplate(
                         rpcClient,
                         pendingAgent!.codedata,
@@ -143,7 +151,9 @@ export function AddAgentPopupContent(props: AddAgentPopupContentProps) {
                     template = await fetchAgentNodeTemplate(rpcClient, projectPath);
                 }
                 template.codedata.lineRange = endOfFile as any;
-                if (cancelled) return;
+                if (cancelled) {
+                    return;
+                }
                 setAgentFilePath(endOfFile.fileName);
                 setTargetLineRange(endOfFile);
                 setAgentNode(template);
@@ -156,8 +166,6 @@ export function AddAgentPopupContent(props: AddAgentPopupContentProps) {
         };
     }, [view, pendingAgent, rpcClient, projectPath]);
 
-    // Fetches the gallery agent list. An empty query returns the default (in-memory cached) view;
-    // a non-empty query triggers a local + central search for the selected source.
     const runSearch = (text: string, filter: AgentFilter) => {
         setIsSearching(true);
         rpcClient
@@ -198,7 +206,7 @@ export function AddAgentPopupContent(props: AddAgentPopupContentProps) {
     }, [searchText]);
 
     const handleCustomAgent = () => {
-        setPendingAgent(undefined);
+        onPendingAgentChange(undefined);
         onViewChange("create");
     };
 
@@ -225,21 +233,16 @@ export function AddAgentPopupContent(props: AddAgentPopupContentProps) {
 
             const agentVarName = String(node.properties?.variable?.value ?? "");
 
-            // In-flow: don't navigate away. Close the popup and let the caller refresh the agent list.
             if (inFlow) {
                 onAgentCreated?.(agentVarName);
                 return;
             }
 
-            // Redirect to the focused agent view for the newly created agent instead of going home.
             const agentArtifact =
                 sourceResponse?.artifacts?.find((artifact) => artifact.isNew && artifact.name === agentVarName) ||
                 sourceResponse?.artifacts?.find((artifact) => artifact.name === agentVarName);
 
             if (agentArtifact?.path && agentArtifact?.position) {
-                // Pass only documentUri + position and let getView classify the artifact: a custom AgentType
-                // class (module !== "ai") resolves to the AGENT_TYPE focus diagram, the built-in to AGENT.
-                // Passing an explicit focus view would desync the post-save VIEW_UPDATE (see agent focus spec).
                 await rpcClient.getVisualizerRpcClient().openView({
                     type: EVENT_TYPE.OPEN_VIEW,
                     location: {
@@ -259,16 +262,27 @@ export function AddAgentPopupContent(props: AddAgentPopupContentProps) {
 
     // Initialize a pre-built agent: open the class-init config form for the selected agent's codedata.
     const handleSelectAgent = (agent: AvailableNode) => {
-        setPendingAgent(agent);
+        if (dependencyMode) {
+            onAgentSelectedForDependency?.(agent);
+            return;
+        }
+        onPendingAgentChange(agent);
         onViewChange("configure");
     };
 
-    const handleCreateNew = () => {
-        // No-op for now. Wire up later.
-    };
+    if (view === "createDefinition") {
+        return (
+            <AgentDefinitionFormContainer>
+                <AgentDefinitionForm projectPath={projectPath} />
+            </AgentDefinitionFormContainer>
+        );
+    }
 
     if (view === "create") {
-        const fieldOverrides = { type: { hidden: true } };
+        const fieldOverrides = {
+            type: { hidden: true },
+            variable: { label: "Agent Name", documentation: "Name of the agent" },
+        };
         const formNode = agentNode ? cloneDeep(agentNode) : undefined;
         return (
             <FormContainer>
@@ -295,11 +309,10 @@ export function AddAgentPopupContent(props: AddAgentPopupContentProps) {
     }
 
     if (view === "configure") {
-        // Pre-built agent: show the model field so the user can supply the ModelProvider; the
-        // predetermined result type is hidden.
-        const fieldOverrides = { type: { hidden: true } };
-        // Show the agent identity (icon + name + description) in a header card, and strip the description from the
-        // form node so it isn't duplicated below the card (mirrors the connector configure popup).
+        const fieldOverrides = {
+            type: { hidden: true },
+            variable: { label: "Agent Name", documentation: "Name of the agent" },
+        };
         const formNode = agentNode ? cloneDeep(agentNode) : undefined;
         if (formNode?.metadata?.description) {
             delete formNode.metadata.description;
@@ -339,9 +352,9 @@ export function AddAgentPopupContent(props: AddAgentPopupContentProps) {
     return (
         <PopupContent>
             <IntroText>
-                To add an agent, define a custom agent for this project or select one of the pre-built
-                agents below. You will then be guided to provide the required details to complete the
-                agent setup.
+                {dependencyMode
+                    ? "Choose the agent this definition should delegate to. The selected agent will be passed into this definition when it is created."
+                    : "To add an agent, define a custom agent for this project or select one of the pre-built agents below. You will then be guided to provide the required details to complete the agent setup."}
             </IntroText>
 
             <SearchContainer>
@@ -354,28 +367,51 @@ export function AddAgentPopupContent(props: AddAgentPopupContentProps) {
             </SearchContainer>
 
             <Section>
-                <SectionTitle variant="h4">Create New Agent</SectionTitle>
+                <SectionTitle variant="h4">{dependencyMode ? "Generic Agent" : "Create New Agent"}</SectionTitle>
                 <CreateAgentOptions>
-                    <AgentOptionCard onClick={handleCustomAgent}>
+                    <AgentOptionCard onClick={dependencyMode ? onGenericAgentSelected : handleCustomAgent}>
                         <AgentOptionIcon>
                             <Icon name="bi-ai-agent" sx={{ fontSize: 24, width: 24, height: 24 }} />
                         </AgentOptionIcon>
                         <AgentOptionContent>
-                            <AgentOptionTitle>Create Agent</AgentOptionTitle>
+                            <AgentOptionTitle>{dependencyMode ? "Generic ai:Agent" : "Create Agent"}</AgentOptionTitle>
                             <AgentOptionDescription>
-                                Create your own agent for this project
+                                {dependencyMode
+                                    ? "Use a flexible agent input when the concrete agent is supplied by the caller."
+                                    : "Create your own agent for this project"}
                             </AgentOptionDescription>
                         </AgentOptionContent>
                         <ArrowIcon>
                             <Codicon name="chevron-right" />
                         </ArrowIcon>
                     </AgentOptionCard>
+                    {!dependencyMode && (
+                        <AgentOptionCard onClick={() => onViewChange("createDefinition")}>
+                            <AgentOptionIcon>
+                                <Icon
+                                    isCodicon={true}
+                                    name="symbol-class"
+                                    sx={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center" }}
+                                    iconSx={{ fontSize: "24px" }}
+                                />
+                            </AgentOptionIcon>
+                            <AgentOptionContent>
+                                <AgentOptionTitle>Create Agent Definition</AgentOptionTitle>
+                                <AgentOptionDescription>
+                                    Build a reusable agent template you can instantiate many times and share with others
+                                </AgentOptionDescription>
+                            </AgentOptionContent>
+                            <ArrowIcon>
+                                <Codicon name="chevron-right" />
+                            </ArrowIcon>
+                        </AgentOptionCard>
+                    )}
                 </CreateAgentOptions>
             </Section>
 
             <ResultsSection>
                 <SectionHeader>
-                    <SectionTitle variant="h4">Pre-built Agents</SectionTitle>
+                    <SectionTitle variant="h4">{dependencyMode ? "Agent Types" : "Pre-built Agents"}</SectionTitle>
                     <SectionHeaderRight>
                         <FilterButtons>
                             <FilterButton
@@ -410,8 +446,8 @@ export function AddAgentPopupContent(props: AddAgentPopupContentProps) {
                         {filterType === "Project"
                             ? "No agents found in this project."
                             : filterType === "Organization"
-                            ? "No agents found in your organization."
-                            : "No agents found."}
+                                ? "No agents found in your organization."
+                                : "No agents found."}
                     </EmptyState>
                 ) : (
                     <AgentsGrid>

@@ -18,7 +18,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import styled from "@emotion/styled";
-import { buildAgentCallToolNode, FlowNode } from "@wso2/ballerina-core";
+import { AgentToolHostClass, buildAgentCallToolNode, FlowNode } from "@wso2/ballerina-core";
 import { FormField, FormValues } from "@wso2/ballerina-side-panel";
 import { Icon } from "@wso2/ui-toolkit";
 import { useRpcContext } from "@wso2/ballerina-rpc-client";
@@ -69,11 +69,14 @@ const ContextHint = styled.div`
 interface UseAgentToolFormProps {
     agentNode: FlowNode;
     agentVarName: string;
+    agentReceiver?: string;
     onSave?: () => void;
+    // When set, the wrapper method is authored inside this agent-definition class + wired into its inner tools=[...].
+    hostClass?: AgentToolHostClass;
 }
 
 export function UseAgentToolForm(props: UseAgentToolFormProps): JSX.Element {
-    const { agentNode, agentVarName, onSave } = props;
+    const { agentNode, agentVarName, agentReceiver, onSave, hostClass } = props;
     const { rpcClient } = useRpcContext();
 
     const [agentFilePath, setAgentFilePath] = useState<string>("");
@@ -129,18 +132,24 @@ export function UseAgentToolForm(props: UseAgentToolFormProps): JSX.Element {
                 .trim();
             // AGENT_TOOL node (AgentToolBuilder, AGENT_CALL kind) replaces the genAgentTool RPC: the tool signature +
             // `<agent>.run(...)` body are generated from the agent variable + context flag in codedata.data.
+            const toolFilePath = hostClass ? hostClass.filePath : agentFilePath;
             await rpcClient.getBIDiagramRpcClient().getSourceCode({
-                filePath: agentFilePath,
-                flowNode: buildAgentCallToolNode(toolName, agentVarName, includeContextRef.current, description),
+                filePath: toolFilePath,
+                flowNode: buildAgentCallToolNode(toolName, agentVarName, includeContextRef.current, description,
+                    hostClass, agentReceiver),
             });
-            const updatedAgentNode = await addToolToAgentNode(agentNode, toolName);
-            if (updatedAgentNode) {
-                const { filePath: agentFile } = await rpcClient.getVisualizerRpcClient().joinProjectPath({
-                    segments: [updatedAgentNode.codedata.lineRange.fileName],
-                });
-                await rpcClient
-                    .getBIDiagramRpcClient()
-                    .getSourceCode({ filePath: agentFile, flowNode: updatedAgentNode });
+            // For an agent-definition class the builder places the method + wires the inner tools=[...] in one edit;
+            // module-level hosts still need the tools list rewired via the AGENT node re-emit.
+            if (!hostClass) {
+                const updatedAgentNode = await addToolToAgentNode(agentNode, toolName);
+                if (updatedAgentNode) {
+                    const { filePath: agentFile } = await rpcClient.getVisualizerRpcClient().joinProjectPath({
+                        segments: [updatedAgentNode.codedata.lineRange.fileName],
+                    });
+                    await rpcClient
+                        .getBIDiagramRpcClient()
+                        .getSourceCode({ filePath: agentFile, flowNode: updatedAgentNode });
+                }
             }
             onSave?.();
         } catch (error) {

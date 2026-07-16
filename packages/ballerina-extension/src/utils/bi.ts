@@ -424,11 +424,6 @@ sticky = true
         const libraryBal = path.join(projectRoot, 'lib.bal');
         const libraryBalContent = `import ${VALIDATOR_PACKAGE_NAME} as _;`;
         writeBallerinaFileDidOpen(libraryBal, libraryBalContent);
-        try {
-            await runBackgroundTerminalCommand(`bal pull ${VALIDATOR_PACKAGE_NAME}`);
-        } catch (error) {
-            console.error('Failed to pull library validator package:', error);
-        }
     }
 
     // Create Ballerina.toml file
@@ -476,6 +471,10 @@ sticky = true
     const gitignorePath = path.join(projectRoot, '.gitignore');
     fs.writeFileSync(gitignorePath, gitignoreContent.trim());
 
+    if (projectRequest.isLibrary) {
+        pullValidatorDependency();
+    }
+
     console.log(`Integration(default profile) created successfully at ${projectRoot}`);
     return projectRoot;
 }
@@ -518,11 +517,19 @@ export async function convertProjectToWorkspace(params: AddProjectToWorkspaceReq
     openInVSCode(newDirectory);
 }
 
-export async function addProjectToExistingWorkspace(params: AddProjectToWorkspaceRequest): Promise<void> {
+export async function addProjectToExistingWorkspace(params: AddProjectToWorkspaceRequest): Promise<string> {
     const workspacePath = StateMachine.context().workspacePath;
+    const projectPath = await createProjectInWorkspace(params, workspacePath);
     addToWorkspaceToml(workspacePath, sanitizeName(params.packageName));
 
-    await createProjectInWorkspace(params, workspacePath);
+    return projectPath;
+}
+
+function pullValidatorDependency(): void {
+    void runBackgroundTerminalCommand(`bal pull ${VALIDATOR_PACKAGE_NAME}`)
+        .catch((error) => {
+            console.error('Failed to pull library validator package:', error);
+        });
 }
 
 function createWorkspaceToml(workspacePath: string, projectTitle: string, packageName: string) {

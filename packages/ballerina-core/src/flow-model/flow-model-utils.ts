@@ -95,17 +95,32 @@ export function traverseNode(node: FlowNode, visitor: BaseVisitor, parent?: Flow
 }
 
 /**
+ * When set, the generated `@ai:AgentTool` method is written *inside* the given agent-definition class (and wired
+ * into its inner `tools = [...]`) instead of at module level. `filePath` is the class file (absolute).
+ */
+export interface AgentToolHostClass {
+    className: string;
+    filePath: string;
+}
+
+/**
  * Builds an AGENT_TOOL flow node that wraps the given node (a function / connection / resource action) as an
  * `@ai:AgentTool`. Consumed by `getSourceCode` → `AgentToolBuilder` (replaces the former `genTool` RPC): the tool
  * signature rides as node properties (`functionName`, `parameters`); the wrapped node + connection ride in
- * `codedata.data`.
+ * `codedata.data`. Pass `hostClass` to place the method inside an agent-definition class.
  */
 export function buildAgentToolNode(wrappedNode: FlowNode, toolName: string, description: string, connection: string,
-    toolParameters?: unknown): FlowNode {
+    toolParameters?: unknown, hostClass?: AgentToolHostClass): FlowNode {
     return {
         id: "0",
         metadata: { label: "Agent Tool", description: "" },
-        codedata: { node: "AGENT_TOOL", isNew: true, data: { node: wrappedNode, connection, description } },
+        codedata: {
+            node: "AGENT_TOOL", isNew: true,
+            data: {
+                node: wrappedNode, connection, description,
+                ...(hostClass ? { hostClassName: hostClass.className, filePath: hostClass.filePath } : {}),
+            },
+        },
         properties: {
             functionName: {
                 metadata: { label: "Name", description: "Name of the tool" },
@@ -121,14 +136,18 @@ export function buildAgentToolNode(wrappedNode: FlowNode, toolName: string, desc
 }
 
 export function buildAgentCallToolNode(toolName: string, agentVarName: string, includeContext: boolean,
-    description: string): FlowNode {
+    description: string, hostClass?: AgentToolHostClass, agentReceiver?: string): FlowNode {
     return {
         id: "0",
         metadata: { label: "Agent Tool", description: "" },
         codedata: {
             node: "AGENT_TOOL",
             isNew: true,
-            data: { toolKind: "AGENT_CALL", agentVarName, includeContext, description },
+            data: {
+                toolKind: "AGENT_CALL", agentVarName, includeContext, description,
+                ...(agentReceiver ? { agentReceiver } : {}),
+                ...(hostClass ? { hostClassName: hostClass.className, filePath: hostClass.filePath } : {}),
+            },
         },
         properties: {
             functionName: {

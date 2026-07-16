@@ -23,6 +23,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import io.ballerina.compiler.api.ModuleID;
 import io.ballerina.compiler.api.SemanticModel;
+import io.ballerina.compiler.api.symbols.ClassFieldSymbol;
 import io.ballerina.compiler.api.symbols.ClassSymbol;
 import io.ballerina.compiler.api.symbols.FunctionSymbol;
 import io.ballerina.compiler.api.symbols.MethodSymbol;
@@ -31,13 +32,28 @@ import io.ballerina.compiler.api.symbols.SymbolKind;
 import io.ballerina.compiler.api.symbols.TypeSymbol;
 import io.ballerina.compiler.api.symbols.UnionTypeSymbol;
 import io.ballerina.compiler.api.symbols.VariableSymbol;
+import io.ballerina.compiler.syntax.tree.AssignmentStatementNode;
+import io.ballerina.compiler.syntax.tree.CheckExpressionNode;
+import io.ballerina.compiler.syntax.tree.ClassDefinitionNode;
+import io.ballerina.compiler.syntax.tree.ExplicitNewExpressionNode;
+import io.ballerina.compiler.syntax.tree.ExpressionNode;
+import io.ballerina.compiler.syntax.tree.FunctionArgumentNode;
+import io.ballerina.compiler.syntax.tree.FunctionBodyBlockNode;
 import io.ballerina.compiler.syntax.tree.FunctionDefinitionNode;
+import io.ballerina.compiler.syntax.tree.ImplicitNewExpressionNode;
+import io.ballerina.compiler.syntax.tree.ListConstructorExpressionNode;
+import io.ballerina.compiler.syntax.tree.ModuleMemberDeclarationNode;
 import io.ballerina.compiler.syntax.tree.ModulePartNode;
+import io.ballerina.compiler.syntax.tree.NamedArgumentNode;
+import io.ballerina.compiler.syntax.tree.Node;
 import io.ballerina.compiler.syntax.tree.NonTerminalNode;
+import io.ballerina.compiler.syntax.tree.SeparatedNodeList;
+import io.ballerina.compiler.syntax.tree.StatementNode;
 import io.ballerina.compiler.syntax.tree.SyntaxKind;
 import io.ballerina.compiler.syntax.tree.Token;
 import io.ballerina.compiler.syntax.tree.TypeDefinitionNode;
 import io.ballerina.flowmodelgenerator.core.Constants;
+import io.ballerina.flowmodelgenerator.core.model.Codedata;
 import io.ballerina.flowmodelgenerator.core.model.FlowNode;
 import io.ballerina.flowmodelgenerator.core.model.FormBuilder;
 import io.ballerina.flowmodelgenerator.core.model.NodeBuilder;
@@ -96,10 +112,16 @@ public class AgentToolBuilder extends NodeBuilder {
     public static final String DESCRIPTION_KEY = "description";
     public static final String TOOL_KIND_KEY = "toolKind";
     public static final String AGENT_VAR_NAME_KEY = "agentVarName";
+    public static final String AGENT_RECEIVER_KEY = "agentReceiver";
     public static final String INCLUDE_CONTEXT_KEY = "includeContext";
+    // When present, the tool method is written inside this agent-definition class (instead of module level).
+    public static final String HOST_CLASS_NAME_KEY = "hostClassName";
 
     private static final String RUN = "run";
     private static final String RESPONSE_VAR = "response";
+    private static final String INIT = "init";
+    private static final String TOOLS_ARG = "tools";
+    private static final String CLASS_MEMBER_INDENT = "    ";
     private static final Gson gson = new Gson();
 
     @Override
@@ -128,7 +150,7 @@ public class AgentToolBuilder extends NodeBuilder {
         FlowNode wrappedNode = data.get(WRAPPED_NODE_KEY) != null
                 ? gson.fromJson(gson.toJsonTree(data.get(WRAPPED_NODE_KEY)), FlowNode.class) : null;
         ToolKind kind = ToolKind.resolve(data, wrappedNode);
-        if (kind != ToolKind.AGENT_CALL && wrappedNode == null) {
+        if (kind != ToolKind.AGENT_CALL && kind != ToolKind.CUSTOM && wrappedNode == null) {
             throw new IllegalStateException("Agent tool node is missing the wrapped node in codedata.data");
         }
 
@@ -138,23 +160,146 @@ public class AgentToolBuilder extends NodeBuilder {
         Property toolParams = sourceBuilder.getProperty(Property.PARAMETERS_KEY).orElse(null);
         String connection = data.get(CONNECTION_KEY) != null ? data.get(CONNECTION_KEY).toString() : "";
         String agentVarName = data.get(AGENT_VAR_NAME_KEY) != null ? data.get(AGENT_VAR_NAME_KEY).toString() : "";
+        String agentReceiver = data.get(AGENT_RECEIVER_KEY) != null
+                ? data.get(AGENT_RECEIVER_KEY).toString() : agentVarName;
         boolean includeContext = Boolean.parseBoolean(String.valueOf(data.get(INCLUDE_CONTEXT_KEY)));
-        String description = data.get(DESCRIPTION_KEY) != null ? data.get(DESCRIPTION_KEY).toString() : "";
+        String description = data.get(DESCRIPTION_KEY) != null ? data.get(DESCRIPTION_KEY).toString()
+                : sourceBuilder.getProperty(Property.FUNCTION_NAME_DESCRIPTION_KEY)
+                        .map(property -> property.value().toString()).orElse("");
         if (kind == ToolKind.AGENT_CALL && description.isBlank()) {
             description = "Delegates a query to the " + agentVarName + " agent.";
         }
+        // When set, the tool method is placed inside this agent-definition class rather than at module level.
+        String hostClassName = data.get(HOST_CLASS_NAME_KEY) != null ? data.get(HOST_CLASS_NAME_KEY).toString() : null;
 
         SemanticModel semanticModel = sourceBuilder.workspaceManager.semanticModel(sourceBuilder.filePath)
                 .orElse(null);
         // Agent-call has no wrapped node, so it writes through the tool node (AGENT_TOOL + isNew → agents.bal).
         FlowNode genNode = wrappedNode != null ? wrappedNode : toolNode;
+        if (hostClassName != null) {
+            // Pin generation to the class file so imports/placement resolve there instead of functions.bal/agents.bal.
+            genNode = withData(genNode, Constants.FILE_PATH_KEY, sourceBuilder.filePath.toString());
+        }
         SourceBuilder sb = new SourceBuilder(genNode, sourceBuilder.workspaceManager, sourceBuilder.filePath);
         String iconPath = wrappedNode != null && wrappedNode.metadata() != null ? wrappedNode.metadata().icon() : "";
 
-        ToolGenContext context = new ToolGenContext(sb, wrappedNode, connection, description, toolName, toolParams,
-                semanticModel, sourceBuilder.workspaceManager, sourceBuilder.filePath, iconPath, agentVarName,
-                includeContext);
-        return generate(kind, context);
+        ToolGenContext context = new ToolGenContext(sb, wrappedNode, data, connection, description, toolName,
+                toolParams, semanticModel, sourceBuilder.workspaceManager, sourceBuilder.filePath, iconPath,
+                agentVarName, agentReceiver, hostClassName, includeContext);
+        Map<Path, List<TextEdit>> textEdits = generate(kind, context);
+        if (hostClassName != null) {
+            relocateToolIntoClass(textEdits, sb.filePath, hostClassName, toolName, sourceBuilder.workspaceManager);
+        }
+        return textEdits;
+    }
+
+    private static FlowNode withData(FlowNode node, String key, Object value) {
+        Codedata codedata = new Codedata.Builder<>(null).from(node.codedata()).addData(key, value).build();
+        return new FlowNode(node.id(), node.metadata(), codedata, node.returning(), node.branches(),
+                node.properties(), node.diagnostics(), node.flags());
+    }
+
+    // Moves the tool function into the class body (after the last member, indented) and wires self.<tool> into the
+    // inner agent's tools = [...] — one atomic response.
+    private static void relocateToolIntoClass(Map<Path, List<TextEdit>> textEdits, Path classFile, String className,
+                                              String toolName, WorkspaceManager workspaceManager) {
+        List<TextEdit> classEdits = textEdits.get(classFile);
+        if (classEdits == null || classEdits.isEmpty()) {
+            return;
+        }
+        Document document = FileSystemUtils.getDocument(workspaceManager, classFile);
+        if (document == null) {
+            return;
+        }
+        ClassDefinitionNode classNode = findClass(document.syntaxTree().rootNode(), className);
+        if (classNode == null) {
+            return;
+        }
+        // Find the function edit by signature — build() prepends the import edits, so it isn't necessarily first.
+        TextEdit functionEdit = classEdits.stream()
+                .filter(edit -> edit.getNewText().contains("function " + toolName + "("))
+                .findFirst()
+                .orElse(null);
+        if (functionEdit == null) {
+            return;
+        }
+        LinePosition insertPosition = classNode.members().isEmpty()
+                ? classNode.openBrace().lineRange().endLine()
+                : classNode.members().get(classNode.members().size() - 1).lineRange().endLine();
+        functionEdit.setRange(CommonUtils.toRange(insertPosition));
+        functionEdit.setNewText(CLASS_MEMBER_INDENT
+                + functionEdit.getNewText().replace("\n", "\n" + CLASS_MEMBER_INDENT));
+
+        wireToolIntoList(classNode, toolName).ifPresent(classEdits::add);
+    }
+
+    private static ClassDefinitionNode findClass(ModulePartNode root, String className) {
+        for (ModuleMemberDeclarationNode member : root.members()) {
+            if (member instanceof ClassDefinitionNode classDef && classDef.className().text().equals(className)) {
+                return classDef;
+            }
+        }
+        return null;
+    }
+
+    // Appends `self.<tool>` to the inner agent's `tools = [...]` list (empty → [self.x]; non-empty → , self.x).
+    private static Optional<TextEdit> wireToolIntoList(ClassDefinitionNode classNode, String toolName) {
+        ListConstructorExpressionNode toolsList = findInnerToolsList(classNode);
+        if (toolsList == null) {
+            return Optional.empty();
+        }
+        String element = "self." + toolName;
+        if (toolsList.expressions().isEmpty()) {
+            return Optional.of(new TextEdit(
+                    CommonUtils.toRange(toolsList.openBracket().lineRange().endLine()), element));
+        }
+        return Optional.of(new TextEdit(
+                CommonUtils.toRange(toolsList.closeBracket().lineRange().startLine()), ", " + element));
+    }
+
+    private static ListConstructorExpressionNode findInnerToolsList(ClassDefinitionNode classNode) {
+        for (Node member : classNode.members()) {
+            if (!(member instanceof FunctionDefinitionNode func) || !func.functionName().text().equals(INIT)
+                    || !(func.functionBody() instanceof FunctionBodyBlockNode body)) {
+                continue;
+            }
+            for (StatementNode statement : body.statements()) {
+                ListConstructorExpressionNode tools = extractToolsFromAssignment(statement);
+                if (tools != null) {
+                    return tools;
+                }
+            }
+        }
+        return null;
+    }
+
+    // From a `self.<field> = (check) new (... tools = [...] ...)` statement, returns the tools list (or null).
+    private static ListConstructorExpressionNode extractToolsFromAssignment(StatementNode statement) {
+        if (!(statement instanceof AssignmentStatementNode assignment)) {
+            return null;
+        }
+        ExpressionNode expression = assignment.expression();
+        if (expression instanceof CheckExpressionNode checkExpr) {
+            expression = checkExpr.expression();
+        }
+        SeparatedNodeList<FunctionArgumentNode> args;
+        if (expression instanceof ImplicitNewExpressionNode implicitNew) {
+            if (implicitNew.parenthesizedArgList().isEmpty()) {
+                return null;
+            }
+            args = implicitNew.parenthesizedArgList().get().arguments();
+        } else if (expression instanceof ExplicitNewExpressionNode explicitNew) {
+            args = explicitNew.parenthesizedArgList().arguments();
+        } else {
+            return null;
+        }
+        for (FunctionArgumentNode arg : args) {
+            if (arg instanceof NamedArgumentNode namedArg && namedArg.argumentName().name().text().equals(TOOLS_ARG)
+                    && namedArg.expression() instanceof ListConstructorExpressionNode list) {
+                return list;
+            }
+        }
+        return null;
     }
 
     private static Map<Path, List<TextEdit>> generate(ToolKind kind, ToolGenContext ctx) {
@@ -216,7 +361,9 @@ public class AgentToolBuilder extends NodeBuilder {
 
     // TODO: The agent tool annotation form is currently in the extension side, need to move to LS
     private static void emitAnnotation(ToolGenContext ctx) {
-        Map<String, Object> data = ctx.wrappedNode != null ? ctx.wrappedNode.codedata().data() : null;
+        Map<String, Object> data = ctx.data != null && ctx.data.containsKey("auth")
+                ? ctx.data
+                : ctx.wrappedNode != null ? ctx.wrappedNode.codedata().data() : null;
         if (data == null || !data.containsKey("auth")) {
             ctx.sb.token().name("@ai:AgentTool").name(System.lineSeparator());
             return;
@@ -240,6 +387,10 @@ public class AgentToolBuilder extends NodeBuilder {
             }
 
             if (key.equals("scopes")) {
+                if (value.startsWith("[") && value.endsWith("]")) {
+                    fields.add("        " + key + ": " + value);
+                    continue;
+                }
                 String[] scopeParts = value.split(",");
                 List<String> scopeItems = new ArrayList<>();
                 for (String part : scopeParts) {
@@ -274,6 +425,33 @@ public class AgentToolBuilder extends NodeBuilder {
      * resolution, whether it carries an {@code @display} annotation, and its body.
      */
     private enum ToolKind {
+        CUSTOM {
+            @Override
+            List<ToolParam> resolveParams(ToolGenContext ctx) {
+                return wrappedToolParams(ctx.toolParams);
+            }
+
+            @Override
+            ReturnInfo resolveReturn(ToolGenContext ctx) {
+                String typeName = ctx.sb.getProperty(Property.TYPE_KEY)
+                        .map(property -> property.value().toString()).orElse("");
+                String description = ctx.sb.getProperty(Property.RETURN_DESCRIPTION_KEY)
+                        .map(property -> property.value().toString()).filter(value -> !value.isBlank()).orElse(null);
+                return new ReturnInfo(typeName, false, description);
+            }
+
+            @Override
+            boolean hasDisplay() {
+                return false;
+            }
+
+            @Override
+            Map<Path, List<TextEdit>> buildBody(ToolGenContext ctx, List<ToolParam> params, ReturnInfo returnInfo) {
+                ctx.sb.token().keyword(SyntaxKind.OPEN_BRACE_TOKEN).keyword(SyntaxKind.CLOSE_BRACE_TOKEN);
+                ctx.sb.textEdit(SourceBuilder.SourceKind.DECLARATION).acceptImport();
+                return ctx.sb.build();
+            }
+        },
         FUNCTION {
             @Override
             List<ToolParam> resolveParams(ToolGenContext ctx) {
@@ -366,7 +544,8 @@ public class AgentToolBuilder extends NodeBuilder {
             @Override
             ReturnInfo resolveReturn(ToolGenContext ctx) {
                 ModuleInfo hostModule = resolveHostModule(ctx.filePath, ctx.workspaceManager);
-                String typeName = resolveAgentRunReturnType(ctx.semanticModel, ctx.agentVarName, hostModule, ctx.sb);
+                String typeName = resolveAgentRunReturnType(ctx.semanticModel, ctx.agentVarName, hostModule, ctx.sb,
+                        ctx.workspaceManager, ctx.filePath, ctx.hostClassName);
                 return new ReturnInfo(typeName, true, "The response from the " + ctx.agentVarName + " agent.");
             }
 
@@ -666,7 +845,7 @@ public class AgentToolBuilder extends NodeBuilder {
                 .name(RESPONSE_VAR)
                 .whiteSpace()
                 .keyword(SyntaxKind.EQUAL_TOKEN)
-                .name(ctx.agentVarName)
+                .name(ctx.agentReceiver)
                 .keyword(SyntaxKind.DOT_TOKEN)
                 .name(RUN)
                 .keyword(SyntaxKind.OPEN_PAREN_TOKEN)
@@ -824,34 +1003,68 @@ public class AgentToolBuilder extends NodeBuilder {
 
     // Wrapper return type from <agentVarName>.run(...); built-in/unresolvable/anydata fall back to string.
     private static String resolveAgentRunReturnType(SemanticModel semanticModel, String agentVarName,
-                                                    ModuleInfo hostModule, SourceBuilder sourceBuilder) {
+                                                    ModuleInfo hostModule, SourceBuilder sourceBuilder,
+                                                    WorkspaceManager workspaceManager, Path filePath,
+                                                    String hostClassName) {
         if (semanticModel == null) {
             return "string";
+        }
+        if (hostClassName != null && !hostClassName.isBlank()) {
+            TypeSymbol hostFieldType = resolveHostClassFieldType(semanticModel, workspaceManager, filePath,
+                    hostClassName, agentVarName);
+            return resolveAgentRunReturnType(semanticModel, hostFieldType, hostModule, sourceBuilder);
         }
         for (Symbol symbol : semanticModel.moduleSymbols()) {
             if (symbol.kind() != SymbolKind.VARIABLE || !agentVarName.equals(symbol.getName().orElse(""))) {
                 continue;
             }
-            TypeSymbol type = CommonUtils.getRawType(((VariableSymbol) symbol).typeDescriptor());
-            if (type.kind() != SymbolKind.CLASS || CommonUtils.isAgentClass(type)) {
-                return "string";
-            }
-            MethodSymbol runMethod = ((ClassSymbol) type).methods().get(RUN);
-            if (runMethod == null) {
-                return "string";
-            }
-            Optional<TypeSymbol> optReturn = runMethod.typeDescriptor().returnTypeDescriptor();
-            if (optReturn.isEmpty()) {
-                return "string";
-            }
-            acceptTypeImports(optReturn.get(), hostModule, sourceBuilder);
-            String signature = CommonUtils.getTypeSignature(semanticModel, optReturn.get(), true, hostModule);
-            if (signature.isBlank() || signature.equals("anydata") || signature.equals("()")) {
-                return "string";
-            }
-            return signature;
+            return resolveAgentRunReturnType(semanticModel, ((VariableSymbol) symbol).typeDescriptor(), hostModule,
+                    sourceBuilder);
         }
         return "string";
+    }
+
+    private static TypeSymbol resolveHostClassFieldType(SemanticModel semanticModel, WorkspaceManager workspaceManager,
+                                                        Path filePath, String hostClassName, String fieldName) {
+        Document document = FileSystemUtils.getDocument(workspaceManager, filePath);
+        if (document == null) {
+            return null;
+        }
+        ClassDefinitionNode classNode = findClass(document.syntaxTree().rootNode(), hostClassName);
+        if (classNode == null) {
+            return null;
+        }
+        Optional<Symbol> symbol = semanticModel.symbol(classNode);
+        if (symbol.isEmpty() || !(symbol.get() instanceof ClassSymbol classSymbol)) {
+            return null;
+        }
+        ClassFieldSymbol fieldSymbol = classSymbol.fieldDescriptors().get(fieldName);
+        return fieldSymbol != null ? fieldSymbol.typeDescriptor() : null;
+    }
+
+    private static String resolveAgentRunReturnType(SemanticModel semanticModel, TypeSymbol agentType,
+                                                    ModuleInfo hostModule, SourceBuilder sourceBuilder) {
+        if (agentType == null) {
+            return "string";
+        }
+        TypeSymbol type = CommonUtils.getRawType(agentType);
+        if (type.kind() != SymbolKind.CLASS || CommonUtils.isAgentClass(type)) {
+            return "string";
+        }
+        MethodSymbol runMethod = ((ClassSymbol) type).methods().get(RUN);
+        if (runMethod == null) {
+            return "string";
+        }
+        Optional<TypeSymbol> optReturn = runMethod.typeDescriptor().returnTypeDescriptor();
+        if (optReturn.isEmpty()) {
+            return "string";
+        }
+        acceptTypeImports(optReturn.get(), hostModule, sourceBuilder);
+        String signature = CommonUtils.getTypeSignature(semanticModel, optReturn.get(), true, hostModule);
+        if (signature.isBlank() || signature.equals("anydata") || signature.equals("()")) {
+            return "string";
+        }
+        return signature;
     }
 
     private static ModuleInfo resolveHostModule(Path filePath, WorkspaceManager workspaceManager) {
@@ -945,6 +1158,7 @@ public class AgentToolBuilder extends NodeBuilder {
 
         private final SourceBuilder sb;
         private final FlowNode wrappedNode;
+        private final Map<String, Object> data;
         private final String connection;
         private final String description;
         private final String toolName;
@@ -954,14 +1168,18 @@ public class AgentToolBuilder extends NodeBuilder {
         private final Path filePath;
         private final String iconPath;
         private final String agentVarName;
+        private final String agentReceiver;
+        private final String hostClassName;
         private final boolean includeContext;
 
-        private ToolGenContext(SourceBuilder sb, FlowNode wrappedNode, String connection, String description,
+        private ToolGenContext(SourceBuilder sb, FlowNode wrappedNode, Map<String, Object> data,
+                               String connection, String description,
                                String toolName, Property toolParams, SemanticModel semanticModel,
                                WorkspaceManager workspaceManager, Path filePath, String iconPath, String agentVarName,
-                               boolean includeContext) {
+                               String agentReceiver, String hostClassName, boolean includeContext) {
             this.sb = sb;
             this.wrappedNode = wrappedNode;
+            this.data = data;
             this.connection = connection;
             this.description = description;
             this.toolName = toolName;
@@ -971,6 +1189,8 @@ public class AgentToolBuilder extends NodeBuilder {
             this.filePath = filePath;
             this.iconPath = iconPath;
             this.agentVarName = agentVarName;
+            this.agentReceiver = agentReceiver;
+            this.hostClassName = hostClassName;
             this.includeContext = includeContext;
         }
 

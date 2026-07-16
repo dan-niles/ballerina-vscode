@@ -82,6 +82,7 @@ async function buildProjectArtifactsStructure(
             [DIRECTORY_MAP.DATA_MAPPER]: [],
             [DIRECTORY_MAP.NP_FUNCTION]: [],
             [DIRECTORY_MAP.AGENTS]: [],
+            [DIRECTORY_MAP.AGENT_DEFINITIONS]: [],
             [DIRECTORY_MAP.LOCAL_CONNECTORS]: [],
             [DIRECTORY_MAP.WORKFLOW]: [],
             [DIRECTORY_MAP.ACTIVITY]: [],
@@ -184,6 +185,7 @@ async function traverseComponents(artifacts: Artifacts, projectPath: string, res
     response.directoryMap[DIRECTORY_MAP.DATA_MAPPER].push(...await getComponents(artifacts[ARTIFACT_TYPE.DataMappers], projectPath, DIRECTORY_MAP.DATA_MAPPER, "dataMapper"));
     response.directoryMap[DIRECTORY_MAP.CONNECTION].push(...await getComponents(artifacts[ARTIFACT_TYPE.Connections], projectPath, DIRECTORY_MAP.CONNECTION, "connection"));
     response.directoryMap[DIRECTORY_MAP.AGENTS].push(...await getComponents(artifacts[ARTIFACT_TYPE.Agents], projectPath, DIRECTORY_MAP.AGENT, "bi-ai-agent"));
+    response.directoryMap[DIRECTORY_MAP.AGENT_DEFINITIONS].push(...await getComponents(artifacts[ARTIFACT_TYPE.AgentDefinitions], projectPath, DIRECTORY_MAP.AGENT_DEFINITION, "bi-ai-agent"));
     response.directoryMap[DIRECTORY_MAP.TYPE].push(...await getComponents(artifacts[ARTIFACT_TYPE.Types], projectPath, DIRECTORY_MAP.TYPE, "type"));
     response.directoryMap[DIRECTORY_MAP.CONFIGURABLE].push(...await getComponents(artifacts[ARTIFACT_TYPE.Configurations], projectPath, DIRECTORY_MAP.CONFIGURABLE, "config"));
     response.directoryMap[DIRECTORY_MAP.NP_FUNCTION].push(...await getComponents(artifacts[ARTIFACT_TYPE.NaturalFunctions], projectPath, DIRECTORY_MAP.NP_FUNCTION, "function"));
@@ -285,6 +287,9 @@ async function getEntryValue(artifact: BaseArtifact, projectPath: string, icon: 
         case DIRECTORY_MAP.AGENT:
             entryValue.icon = icon;
             break;
+        case DIRECTORY_MAP.AGENT_DEFINITION:
+            entryValue.icon = icon;
+            break;
         case DIRECTORY_MAP.RESOURCE:
             // Do things related to resource
             let resourceName = `${artifact.name}`;
@@ -363,6 +368,8 @@ function getDirectoryMapKeyAndIcon(artifact: BaseArtifact, artifactCategoryKey: 
             return { mapKey: DIRECTORY_MAP.CONNECTION, icon: "connection" };
         case ARTIFACT_TYPE.Agents:
             return { mapKey: DIRECTORY_MAP.AGENTS, icon: "bi-ai-agent" };
+        case ARTIFACT_TYPE.AgentDefinitions:
+            return { mapKey: DIRECTORY_MAP.AGENT_DEFINITIONS, icon: "bi-ai-agent" };
         case ARTIFACT_TYPE.Types:
             return { mapKey: DIRECTORY_MAP.TYPE, icon: "type" };
         case ARTIFACT_TYPE.Configurations:
