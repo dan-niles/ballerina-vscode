@@ -86,8 +86,8 @@ import {
     openPublishDescriptionInEditor,
     selectSampleDownloadPath
 } from "./utils";
-import { syncPackageKeyword, updatePackageDetails } from "./package-toml";
 import { VisualizerWebview } from "../../views/visualizer/webview";
+import { updateSourceCode } from "../../utils/source-utils";
 
 export class CommonRpcManager implements CommonRPCAPI {
     async getTypeCompletions(): Promise<TypeResponse> {
@@ -651,14 +651,15 @@ export class CommonRpcManager implements CommonRPCAPI {
     }
 
     private async updateProjectPackageInfo(projectPath: string, details: PublishPackageInfo): Promise<boolean> {
-        const ballerinaTomlPath = path.join(projectPath, 'Ballerina.toml');
-        if (!fs.existsSync(ballerinaTomlPath)) {
-            return false;
-        }
-
         try {
-            const tomlContent = await fs.promises.readFile(ballerinaTomlPath, 'utf-8');
-            await fs.promises.writeFile(ballerinaTomlPath, updatePackageDetails(tomlContent, details), 'utf-8');
+            const response = await StateMachine.langClient().updatePackageManifest({
+                projectPath,
+                patch: { package: { org: details.orgName, name: details.packageName, version: details.version } }
+            });
+            if (response.errorMsg) {
+                throw new Error(response.errorMsg);
+            }
+            await updateSourceCode({ textEdits: response.textEdits ?? {}, description: 'Update package metadata' });
             return true;
         } catch (error) {
             console.error('Failed to update Ballerina.toml package metadata:', error);
@@ -673,14 +674,17 @@ export class CommonRpcManager implements CommonRPCAPI {
             return;
         }
 
-        const ballerinaTomlPath = path.join(projectPath, 'Ballerina.toml');
         try {
-            const tomlContent = await fs.promises.readFile(ballerinaTomlPath, 'utf-8');
-            const updatedToml = syncPackageKeyword(tomlContent, 'Type/Agent', hasPublicAgentDefinition);
-            if (updatedToml === tomlContent) {
-                return;
+            const response = await StateMachine.langClient().updatePackageManifest({
+                projectPath,
+                patch: {
+                    keywords: hasPublicAgentDefinition ? { add: ['Type/Agent'] } : { remove: ['Type/Agent'] }
+                }
+            });
+            if (response.errorMsg) {
+                throw new Error(response.errorMsg);
             }
-            await fs.promises.writeFile(ballerinaTomlPath, updatedToml, 'utf-8');
+            await updateSourceCode({ textEdits: response.textEdits ?? {}, description: 'Update package keywords' });
         } catch (error) {
             // Publishing remains available when the manifest cannot be safely updated. In
             // particular, never remove a keyword after an incomplete or invalid TOML read.

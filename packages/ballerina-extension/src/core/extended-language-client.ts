@@ -177,6 +177,7 @@ import {
     ServiceClassModelResponse,
     ClassFieldModifierRequest,
     SourceEditResponse,
+    PackageManifestUpdateRequest,
     ServiceClassSourceRequest,
     AddFieldRequest,
     AddInitParameterRequest,
@@ -467,6 +468,7 @@ enum EXTENDED_APIS {
     BI_GET_CLASS_OWNED_NODES = 'flowDesignService/getClassOwnedNodes',
     BI_UPSERT_CLASS_OWNED_NODE = 'flowDesignService/upsertClassOwnedNode',
     BI_REMOVE_CLASS_OWNED_NODE = 'flowDesignService/removeClassOwnedNode',
+    BI_UPDATE_PACKAGE_MANIFEST = 'ballerinaPackage/updateManifest',
     BI_UPDATE_CLASS_INIT_PARAMETER = 'serviceDesign/updateClassInitParameter',
     BI_REMOVE_CLASS_INIT_PARAMETER = 'serviceDesign/removeClassInitParameter',
     BI_DESIGN_MODEL = 'designModelService/getDesignModel',
@@ -1414,6 +1416,10 @@ export class ExtendedLangClient extends LanguageClient implements ExtendedLangCl
 
     async removeClassOwnedNode(params: ClassOwnedNodeDeleteRequest): Promise<SourceEditResponse> {
         return this.sendRequest<SourceEditResponse>(EXTENDED_APIS.BI_REMOVE_CLASS_OWNED_NODE, params);
+    }
+
+    async updatePackageManifest(params: PackageManifestUpdateRequest): Promise<SourceEditResponse> {
+        return this.sendRequest<SourceEditResponse>(EXTENDED_APIS.BI_UPDATE_PACKAGE_MANIFEST, params);
     }
 
     async updateClassInitParameter(params: ClassInitParameterModifierRequest): Promise<SourceEditResponse> {
