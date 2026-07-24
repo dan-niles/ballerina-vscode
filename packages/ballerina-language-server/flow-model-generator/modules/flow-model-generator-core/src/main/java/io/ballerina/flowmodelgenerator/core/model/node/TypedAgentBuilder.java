@@ -30,7 +30,7 @@ import org.ballerinalang.langserver.common.utils.NameUtil;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-public class AgentTypeBuilder extends ClassInitBuilder {
+public class TypedAgentBuilder extends ClassInitBuilder {
 
     private static final String AGENT_LABEL = "Agent";
 
