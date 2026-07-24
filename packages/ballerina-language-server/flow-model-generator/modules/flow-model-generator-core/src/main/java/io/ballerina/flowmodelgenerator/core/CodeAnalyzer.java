@@ -2834,7 +2834,7 @@ public class CodeAnalyzer extends NodeVisitor {
                     .object(name)
                     .symbol(NewConnectionBuilder.INIT_SYMBOL);
 
-        if (kind == NodeKind.AGENT || kind == NodeKind.AGENT_TYPE) {
+        if (kind == NodeKind.AGENT || kind == NodeKind.TYPED_AGENT) {
             nodeBuilder.codedata().packageName(packageName).version(functionData.version());
         }
 
@@ -2871,7 +2871,7 @@ public class CodeAnalyzer extends NodeVisitor {
             }
         }
 
-        if (kind == NodeKind.AGENT_TYPE) {
+        if (kind == NodeKind.TYPED_AGENT) {
             AiUtils.applyAgentTypeMetadata(nodeBuilder, classSymbol, argumentNodes, project, this::getModelIconUrl,
                     this::getMemoryData);
         }
@@ -2916,7 +2916,7 @@ public class CodeAnalyzer extends NodeVisitor {
             return NodeKind.AGENT;
         }
         if (isAiFixedTypedAgent(classSymbol) || isAiDependentlyTypedAgent(classSymbol)) {
-            return NodeKind.AGENT_TYPE;
+            return NodeKind.TYPED_AGENT;
         }
         if (isAiModelProvider(classSymbol)) {
             return NodeKind.MODEL_PROVIDER;

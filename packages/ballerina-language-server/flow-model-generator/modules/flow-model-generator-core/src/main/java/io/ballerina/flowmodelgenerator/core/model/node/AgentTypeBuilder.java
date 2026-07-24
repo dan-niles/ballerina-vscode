@@ -36,13 +36,13 @@ public class AgentTypeBuilder extends ClassInitBuilder {
 
     @Override
     protected NodeKind getFunctionNodeKind() {
-        return NodeKind.AGENT_TYPE;
+        return NodeKind.TYPED_AGENT;
     }
 
     @Override
     public void setConcreteConstData() {
         metadata().label(AGENT_LABEL);
-        codedata().node(NodeKind.AGENT_TYPE).symbol("init");
+        codedata().node(NodeKind.TYPED_AGENT).symbol("init");
     }
 
     @Override

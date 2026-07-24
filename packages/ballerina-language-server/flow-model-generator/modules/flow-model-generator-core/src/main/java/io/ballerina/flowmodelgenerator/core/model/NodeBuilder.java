@@ -174,7 +174,7 @@ public abstract class NodeBuilder implements DiagnosticHandler.DiagnosticCapable
         put(NodeKind.PARALLEL_FLOW, ParallelFlowBuilder::new);
         put(NodeKind.WAIT, WaitBuilder::new);
         put(NodeKind.AGENT, AgentBuilder::new);
-        put(NodeKind.AGENT_TYPE, AgentTypeBuilder::new);
+        put(NodeKind.TYPED_AGENT, AgentTypeBuilder::new);
         put(NodeKind.AGENT_CALL, AgentCallBuilder::new);
         put(NodeKind.AGENT_RUN, AgentRunBuilder::new);
         put(NodeKind.AGENT_TOOL, AgentToolBuilder::new);

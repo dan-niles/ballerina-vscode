@@ -1833,7 +1833,7 @@ public class AiUtils {
             return null;
         }
         ModuleInfo moduleInfo = ModuleInfo.from(module.get().id());
-        NodeKind nodeKind = CommonUtils.isAgentClass(agentClass) ? NodeKind.AGENT : NodeKind.AGENT_TYPE;
+        NodeKind nodeKind = CommonUtils.isAgentClass(agentClass) ? NodeKind.AGENT : NodeKind.TYPED_AGENT;
         Codedata agent = new Codedata.Builder<>(null)
                 .node(nodeKind)
                 .org(moduleInfo.org())
