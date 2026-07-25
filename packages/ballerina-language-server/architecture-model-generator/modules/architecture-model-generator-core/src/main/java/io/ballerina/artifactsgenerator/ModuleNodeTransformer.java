@@ -207,26 +207,26 @@ public class ModuleNodeTransformer extends NodeTransformer<Optional<Artifact>> {
                     .type(Artifact.Type.CONFIGURABLE)
                     .visibility(varVisibility);
         } else {
-            Optional<ClassSymbol> agent = getAgent(moduleVariableDeclarationNode);
-            if (agent.isPresent()) {
+            Optional<ClassSymbol> connection = getConnection(moduleVariableDeclarationNode);
+            if (connection.isPresent()) {
+                ClassSymbol clientClassSymbol = connection.get();
                 variableBuilder
-                        .type(Artifact.Type.AGENT)
-                        .icon(agent.get())
+                        .type(Artifact.Type.CONNECTION)
+                        .icon(clientClassSymbol)
                         .visibility(varVisibility);
-            } else {
-                Optional<ClassSymbol> connection = getConnection(moduleVariableDeclarationNode);
-                if (connection.isPresent()) {
-                    ClassSymbol clientClassSymbol = connection.get();
+                if (isPersistClient(clientClassSymbol, semanticModel)) {
                     variableBuilder
-                            .type(Artifact.Type.CONNECTION)
-                            .icon(clientClassSymbol)
+                            .addMetadata(CONNECTOR_TYPE, PERSIST);
+                    getPersistModelFilePath(projectPath, clientClassSymbol)
+                            .ifPresent(modelFile -> variableBuilder.addMetadata(PERSIST_MODEL_FILE, modelFile));
+                }
+            } else {
+                Optional<ClassSymbol> agent = getAgent(moduleVariableDeclarationNode);
+                if (agent.isPresent()) {
+                    variableBuilder
+                            .type(Artifact.Type.AGENT)
+                            .icon(agent.get())
                             .visibility(varVisibility);
-                    if (isPersistClient(clientClassSymbol, semanticModel)) {
-                        variableBuilder
-                                .addMetadata(CONNECTOR_TYPE, PERSIST);
-                        getPersistModelFilePath(projectPath, clientClassSymbol)
-                                .ifPresent(modelFile -> variableBuilder.addMetadata(PERSIST_MODEL_FILE, modelFile));
-                    }
                 } else {
                     variableBuilder
                             .type(Artifact.Type.VARIABLE)
