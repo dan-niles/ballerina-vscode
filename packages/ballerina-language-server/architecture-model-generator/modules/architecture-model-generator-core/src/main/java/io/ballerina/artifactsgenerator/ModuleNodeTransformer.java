@@ -92,6 +92,7 @@ public class ModuleNodeTransformer extends NodeTransformer<Optional<Artifact>> {
         String functionName = functionDefinitionNode.functionName().text();
 
         Optional<Symbol> functionSymbol = semanticModel.symbol(functionDefinitionNode);
+        // Hide agent tools from being rendered under "Functions" in the artifact tree
         if (functionDefinitionNode.kind() == SyntaxKind.FUNCTION_DEFINITION
                 && functionSymbol.isPresent() && CommonUtils.isAgentToolFunction(functionSymbol.get())) {
             return Optional.empty();
