@@ -976,7 +976,9 @@ public class ServiceModelGeneratorService implements ExtendedLanguageServerServi
                         || !ServiceClassUtil.isAgentClass(semanticModel.get(), classDef)) {
                     return new CommonSourceResponse();
                 }
-                List<TextEdit> edits = ServiceClassUtil.buildUpdateInitParameterEdits(fieldNode, request.field());
+                ModulePartNode modulePartNode = document.get().syntaxTree().rootNode();
+                List<TextEdit> edits = ServiceClassUtil.buildUpdateInitParameterEdits(fieldNode, request.field(),
+                        modulePartNode);
                 return new CommonSourceResponse(Map.of(request.filePath(), edits));
             } catch (Throwable e) {
                 return new CommonSourceResponse(e);
