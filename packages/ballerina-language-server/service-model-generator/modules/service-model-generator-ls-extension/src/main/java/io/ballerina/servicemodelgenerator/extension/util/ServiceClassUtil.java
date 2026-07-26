@@ -20,6 +20,7 @@ package io.ballerina.servicemodelgenerator.extension.util;
 
 import io.ballerina.compiler.api.SemanticModel;
 import io.ballerina.compiler.api.symbols.AnnotationSymbol;
+import io.ballerina.compiler.api.symbols.ClassSymbol;
 import io.ballerina.compiler.api.symbols.ModuleSymbol;
 import io.ballerina.compiler.api.symbols.Symbol;
 import io.ballerina.compiler.syntax.tree.AssignmentStatementNode;
@@ -174,8 +175,8 @@ public class ServiceClassUtil {
                         + (effectivePrefix.equals(naturalPrefix) ? "" : " as " + effectivePrefix) + ";";
                 importEdits.add(importTextEdit(modulePartNode, existing, stmt));
             }
-            if (!effectivePrefix.equals(requestedPrefix) && typeValue.startsWith(requestedPrefix + COLON)) {
-                typeValue = effectivePrefix + typeValue.substring(requestedPrefix.length());
+            if (!effectivePrefix.equals(requestedPrefix)) {
+                typeValue = typeValue.replace(requestedPrefix + COLON, effectivePrefix + COLON);
             }
         }
         field.getType().setValue(typeValue);
@@ -260,7 +261,8 @@ public class ServiceClassUtil {
         if (init.functionBody() instanceof FunctionBodyBlockNode body) {
             for (StatementNode stmt : body.statements()) {
                 if (stmt instanceof AssignmentStatementNode asn
-                        && asn.varRef().toSourceCode().trim().equals("self." + name)) {
+                        && asn.varRef().toSourceCode().trim().equals("self." + name)
+                        && asn.expression().toSourceCode().trim().equals(name)) {
                     edits.add(removeLineEdit(stmt.lineRange(), textDocument));
                     break;
                 }
@@ -373,6 +375,14 @@ public class ServiceClassUtil {
             }
         }
         return TAB;
+    }
+
+    public static boolean isAgentClass(SemanticModel semanticModel, ClassDefinitionNode classDef) {
+        return semanticModel.symbol(classDef)
+                .filter(ClassSymbol.class::isInstance)
+                .map(ClassSymbol.class::cast)
+                .map(CommonUtils::isAgentClass)
+                .orElse(false);
     }
 
     public static ServiceClass getServiceClass(SemanticModel semanticModel, ClassDefinitionNode classDef,

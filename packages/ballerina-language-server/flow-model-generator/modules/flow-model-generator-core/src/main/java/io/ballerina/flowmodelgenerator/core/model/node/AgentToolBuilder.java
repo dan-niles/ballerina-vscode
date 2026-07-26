@@ -174,7 +174,8 @@ public class AgentToolBuilder extends NodeBuilder {
                 agentVarName, agentReceiver, hostClassName, includeContext);
         Map<Path, List<TextEdit>> textEdits = generate(kind, context);
         if (hostClassName != null) {
-            relocateToolIntoClass(textEdits, sb.filePath, hostClassName, toolName, sourceBuilder.workspaceManager);
+            relocateToolIntoClass(textEdits, sb.filePath, hostClassName, toolName, sourceBuilder.workspaceManager,
+                    semanticModel);
         }
         return textEdits;
     }
@@ -191,7 +192,8 @@ public class AgentToolBuilder extends NodeBuilder {
     }
 
     private static void relocateToolIntoClass(Map<Path, List<TextEdit>> textEdits, Path classFile, String className,
-                                              String toolName, WorkspaceManager workspaceManager) {
+                                              String toolName, WorkspaceManager workspaceManager,
+                                              SemanticModel semanticModel) {
         List<TextEdit> classEdits = textEdits.get(classFile);
         if (classEdits == null || classEdits.isEmpty()) {
             return;
@@ -201,7 +203,7 @@ public class AgentToolBuilder extends NodeBuilder {
             return;
         }
         ClassDefinitionNode classNode = findClass(document.syntaxTree().rootNode(), className);
-        if (classNode == null) {
+        if (classNode == null || !isAgentClass(semanticModel, classNode)) {
             return;
         }
         TextEdit functionEdit = classEdits.stream()
@@ -219,6 +221,14 @@ public class AgentToolBuilder extends NodeBuilder {
                 + functionEdit.getNewText().replace("\n", "\n" + CLASS_MEMBER_INDENT));
 
         wireToolIntoList(classNode, toolName).ifPresent(classEdits::add);
+    }
+
+    private static boolean isAgentClass(SemanticModel semanticModel, ClassDefinitionNode classNode) {
+        return semanticModel != null && semanticModel.symbol(classNode)
+                .filter(ClassSymbol.class::isInstance)
+                .map(ClassSymbol.class::cast)
+                .map(CommonUtils::isAgentClass)
+                .orElse(false);
     }
 
     private static ClassDefinitionNode findClass(ModulePartNode root, String className) {
@@ -420,7 +430,12 @@ public class AgentToolBuilder extends NodeBuilder {
 
             @Override
             Map<Path, List<TextEdit>> buildBody(ToolGenContext ctx, List<ToolParam> params, ReturnInfo returnInfo) {
-                ctx.sb.token().keyword(SyntaxKind.OPEN_BRACE_TOKEN).keyword(SyntaxKind.CLOSE_BRACE_TOKEN);
+                ctx.sb.token().keyword(SyntaxKind.OPEN_BRACE_TOKEN);
+                if (!returnInfo.typeName().isEmpty()) {
+                    ctx.sb.token().keyword(SyntaxKind.PANIC_KEYWORD).name("error(\"not implemented\")")
+                            .endOfStatement();
+                }
+                ctx.sb.token().keyword(SyntaxKind.CLOSE_BRACE_TOKEN);
                 ctx.sb.textEdit(SourceBuilder.SourceKind.DECLARATION).acceptImport();
                 return ctx.sb.build();
             }
@@ -661,7 +676,7 @@ public class AgentToolBuilder extends NodeBuilder {
                 .stepOut()
                 .functionParameters(flowNode, ignoredKeys);
 
-        return finishActionBody(sourceBuilder, flowNode, returnType, params);
+        return finishActionBody(sourceBuilder, flowNode, returnType);
     }
 
     private static Map<Path, List<TextEdit>> buildResourceActionBody(ToolGenContext ctx, List<ToolParam> params,
@@ -728,7 +743,7 @@ public class AgentToolBuilder extends NodeBuilder {
                 .stepOut()
                 .functionParameters(flowNode, ignoredKeys);
 
-        return finishActionBody(sourceBuilder, flowNode, returnType, params);
+        return finishActionBody(sourceBuilder, flowNode, returnType);
     }
 
     private static void beginActionBody(SourceBuilder sourceBuilder, FlowNode flowNode, String returnType) {
@@ -743,7 +758,7 @@ public class AgentToolBuilder extends NodeBuilder {
     }
 
     private static Map<Path, List<TextEdit>> finishActionBody(SourceBuilder sourceBuilder, FlowNode flowNode,
-                                                                String returnType, List<ToolParam> params) {
+                                                                String returnType) {
         if (!returnType.isEmpty()) {
             sourceBuilder.token().keyword(SyntaxKind.RETURN_KEYWORD)
                     .name(flowNode.getProperty(Property.VARIABLE_KEY).orElseThrow().value().toString())
@@ -751,9 +766,7 @@ public class AgentToolBuilder extends NodeBuilder {
         }
         sourceBuilder.token().keyword(SyntaxKind.CLOSE_BRACE_TOKEN);
         sourceBuilder.textEdit(SourceBuilder.SourceKind.DECLARATION);
-        if (needsModuleImport(flowNode, returnType, paramDecls(params))) {
-            sourceBuilder.acceptImport();
-        }
+        sourceBuilder.acceptImport();
         return sourceBuilder.build();
     }
 
@@ -780,7 +793,7 @@ public class AgentToolBuilder extends NodeBuilder {
                 .name(RESPONSE_VAR)
                 .endOfStatement();
         sourceBuilder.token().keyword(SyntaxKind.CLOSE_BRACE_TOKEN);
-        sourceBuilder.textEdit(SourceBuilder.SourceKind.DECLARATION);
+        sourceBuilder.textEdit(SourceBuilder.SourceKind.DECLARATION).acceptImport();
         return sourceBuilder.build();
     }
 
@@ -804,23 +817,6 @@ public class AgentToolBuilder extends NodeBuilder {
             paramList.add(new ToolParam(paramType + " " + paramName, paramName, doc));
         }
         return paramList;
-    }
-
-    private static List<String> paramDecls(List<ToolParam> params) {
-        return params.stream().map(ToolParam::decl).collect(Collectors.toList());
-    }
-
-    private static boolean needsModuleImport(FlowNode flowNode, String returnType, List<String> paramList) {
-        String modulePrefix = flowNode.codedata().getModulePrefix() + ":";
-        if (returnType.contains(modulePrefix)) {
-            return true;
-        }
-        for (String param : paramList) {
-            if (param.contains(modulePrefix)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static String resolveTypeInferParams(String returnType, FlowNode flowNode) {
