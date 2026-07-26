@@ -111,6 +111,7 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -187,6 +188,22 @@ public class AiUtils {
 
     public static final String MEMORY_DEFAULT_VALUE = "10";
     public static final String AI_PROMPT_TYPE = "ai:Prompt";
+
+    private static final String AGENT_INFO_KEY = "agentInfo";
+    private static final String CONNECTION_DATA_KEY = "connection";
+    private static final String AGENT_PARAM_DATA_KEY = "agent";
+    private static final String AGENT_DESCRIPTION_KEY = "description";
+    static final String AGENT_SYSTEM_PROMPT_KEY = "systemPrompt";
+    static final String AGENT_TOOLS_KEY = "tools";
+    static final String MODEL_PROVIDER_METADATA_KEY = "modelProvider";
+    static final String MEMORY_METADATA_KEY = "memory";
+    private static final String PROPERTY_KEY = "propertyKey";
+    private static final String PRESENTATION_KEY = "presentation";
+    private static final String MEMORY_INTERFACE_NAME = "Memory";
+    private static final String AGENT_TOOL_ANNOT = "AgentTool";
+    private static final String DISPLAY_ANNOT = "display";
+    private static final String SYSTEM_PROMPT_ROLE = "role";
+    private static final String SYSTEM_PROMPT_INSTRUCTIONS = "instructions";
 
     static {
         versionToFeatures.put("1.0.0",
@@ -1240,25 +1257,8 @@ public class AiUtils {
         return false;
     }
 
-    private static final String AGENT_INFO_KEY = "agentInfo";
-
     private record AgentToolData(String name, String path, String description, String type) {
     }
-
-    private static final String CONNECTION_DATA_KEY = "connection";
-    private static final String AGENT_PARAM_DATA_KEY = "agent";
-    private static final String AGENT_DESCRIPTION_KEY = "description";
-    static final String AGENT_SYSTEM_PROMPT_KEY = "systemPrompt";
-    static final String AGENT_TOOLS_KEY = "tools";
-    static final String MODEL_PROVIDER_METADATA_KEY = "modelProvider";
-    static final String MEMORY_METADATA_KEY = "memory";
-    private static final String PROPERTY_KEY = "propertyKey";
-    private static final String PRESENTATION_KEY = "presentation";
-    private static final String MEMORY_INTERFACE_NAME = "Memory";
-    private static final String AGENT_TOOL_ANNOT = "AgentTool";
-    private static final String DISPLAY_ANNOT = "display";
-    private static final String SYSTEM_PROMPT_ROLE = "role";
-    private static final String SYSTEM_PROMPT_INSTRUCTIONS = "instructions";
 
     private record WiredParam(String name, int index) {
     }
@@ -1460,18 +1460,7 @@ public class AiUtils {
     }
 
     private static Optional<WiredParam> initParamOfType(ClassSymbol classSymbol, String interfaceName) {
-        Optional<MethodSymbol> initMethodOpt = classSymbol.initMethod();
-        if (initMethodOpt.isEmpty()) {
-            return Optional.empty();
-        }
-        List<ParameterSymbol> params = initMethodOpt.get().typeDescriptor().params().orElse(List.of());
-        for (int i = 0; i < params.size(); i++) {
-            ParameterSymbol param = params.get(i);
-            if (param.getName().isPresent() && isAiInterfaceType(param.typeDescriptor(), interfaceName)) {
-                return Optional.of(new WiredParam(param.getName().get(), i));
-            }
-        }
-        return Optional.empty();
+        return findInitParam(classSymbol, param -> isAiInterfaceType(param.typeDescriptor(), interfaceName));
     }
 
     private static List<AgentToolData> toolMethodsOf(ClassSymbol classSymbol) {
@@ -1526,18 +1515,12 @@ public class AiUtils {
     }
 
     public static boolean isMcpToolKitType(TypeSymbol typeSymbol) {
-        return isMcpToolKitAiClass(typeSymbol) || isGeneratedMcpToolKit(typeSymbol);
-    }
-
-    private static boolean isMcpToolKitAiClass(TypeSymbol typeSymbol) {
-        return typeSymbol.nameEquals("McpToolKit") && typeSymbol.getModule()
+        if (typeSymbol.nameEquals("McpToolKit") && typeSymbol.getModule()
                 .map(module -> CommonUtils.isAiModule(module.id().orgName(), module.id().packageName()))
-                .orElse(false);
-    }
-
-    private static boolean isGeneratedMcpToolKit(TypeSymbol typeSymbol) {
-        TypeSymbol rawType = CommonUtils.getRawType(typeSymbol);
-        return rawType instanceof ClassSymbol classSymbol
+                .orElse(false)) {
+            return true;
+        }
+        return CommonUtils.getRawType(typeSymbol) instanceof ClassSymbol classSymbol
                 && CommonUtils.isAiMcpBaseToolKit(classSymbol);
     }
 
@@ -1591,28 +1574,18 @@ public class AiUtils {
     }
 
     private static String parseParameterName(Object value) {
-        if (unwrapConstant(value) instanceof Map<?, ?> map) {
-            Object name = unwrapConstant(map.get("parameterName"));
-            if (name != null && !name.toString().isBlank()) {
-                return name.toString().strip();
-            }
-        }
-        return null;
+        String name = unwrapConstant(value) instanceof Map<?, ?> map
+                ? constantString(map.get("parameterName")) : null;
+        return name == null ? null : name.strip();
     }
 
     private static AgentToolData parseToolMetadata(Map<?, ?> toolMap) {
-        Object nameVal = unwrapConstant(toolMap.get("name"));
-        if (nameVal == null || nameVal.toString().isBlank()) {
+        String name = constantString(toolMap.get("name"));
+        if (name == null) {
             return null;
         }
-        String displayName = nameVal.toString();
-
-        Object kindVal = unwrapConstant(toolMap.get("kind"));
-        boolean isMcp = kindVal != null && "MCP_TOOLKIT".equals(kindVal.toString());
-
-        Object iconVal = unwrapConstant(toolMap.get("icon"));
-        String icon = iconVal != null && !iconVal.toString().isBlank() ? iconVal.toString() : null;
-        return new AgentToolData(displayName, icon, null, isMcp ? "MCP Server" : null);
+        boolean isMcp = "MCP_TOOLKIT".equals(constantString(toolMap.get("kind")));
+        return new AgentToolData(name, constantString(toolMap.get("icon")), null, isMcp ? "MCP Server" : null);
     }
 
     private static Object unwrapConstant(Object value) {
@@ -1626,17 +1599,17 @@ public class AiUtils {
     }
 
     private static Optional<WiredParam> resolveInitParamByName(ClassSymbol classSymbol, String paramName) {
-        if (paramName == null) {
-            return Optional.empty();
-        }
-        Optional<MethodSymbol> initMethodOpt = classSymbol.initMethod();
-        if (initMethodOpt.isEmpty()) {
-            return Optional.empty();
-        }
-        List<ParameterSymbol> params = initMethodOpt.get().typeDescriptor().params().orElse(List.of());
+        return paramName == null ? Optional.empty()
+                : findInitParam(classSymbol, param -> param.getName().filter(paramName::equals).isPresent());
+    }
+
+    private static Optional<WiredParam> findInitParam(ClassSymbol classSymbol, Predicate<ParameterSymbol> matcher) {
+        List<ParameterSymbol> params = classSymbol.initMethod()
+                .flatMap(method -> method.typeDescriptor().params()).orElse(List.of());
         for (int i = 0; i < params.size(); i++) {
-            Optional<String> name = params.get(i).getName();
-            if (name.filter(paramName::equals).isPresent()) {
+            ParameterSymbol param = params.get(i);
+            Optional<String> name = param.getName();
+            if (name.isPresent() && matcher.test(param)) {
                 return Optional.of(new WiredParam(name.get(), i));
             }
         }
@@ -1678,13 +1651,10 @@ public class AiUtils {
     }
 
     private static void markClientConnectionParams(NodeBuilder nodeBuilder, ClassSymbol classSymbol) {
-        markInitParams(nodeBuilder, classSymbol, AiUtils::getClientClass,
+        markInitParams(nodeBuilder, classSymbol,
+                clientClass -> clientClass.qualifiers().contains(Qualifier.CLIENT),
                 (clientClass, existing) -> buildParamCodedata(clientClass, existing, NodeKind.NEW_CONNECTION,
                         CONNECTION_DATA_KEY, false));
-    }
-
-    private static Optional<ClassSymbol> getClientClass(TypeSymbol typeSymbol) {
-        return classForType(typeSymbol).filter(classSymbol -> classSymbol.qualifiers().contains(Qualifier.CLIENT));
     }
 
     public static void markAgentParams(NodeBuilder nodeBuilder, Codedata codedata, Project project) {
@@ -1700,14 +1670,17 @@ public class AiUtils {
     }
 
     private static void markAgentParams(NodeBuilder nodeBuilder, ClassSymbol classSymbol) {
-        markInitParams(nodeBuilder, classSymbol, AiUtils::getAgentClass,
+        markInitParams(nodeBuilder, classSymbol,
+                agentClass -> CommonUtils.isAgentClass(agentClass)
+                        || CommonUtils.isAiFixedTypedAgent(agentClass)
+                        || CommonUtils.isAiDependentlyTypedAgent(agentClass),
                 (agentClass, existing) -> buildParamCodedata(agentClass, existing,
                         CommonUtils.isAgentClass(agentClass) ? NodeKind.AGENT : NodeKind.TYPED_AGENT,
                         AGENT_PARAM_DATA_KEY, null));
     }
 
     private static void markInitParams(NodeBuilder nodeBuilder, ClassSymbol classSymbol,
-                                       Function<TypeSymbol, Optional<ClassSymbol>> paramClassResolver,
+                                       Predicate<ClassSymbol> paramClassMatcher,
                                        BiFunction<ClassSymbol, PropertyCodedata, PropertyCodedata> codedataBuilder) {
         Optional<MethodSymbol> initMethodOpt = classSymbol.initMethod();
         if (initMethodOpt.isEmpty()) {
@@ -1716,8 +1689,9 @@ public class AiUtils {
         Map<String, Property> properties = nodeBuilder.properties().build();
         for (ParameterSymbol param : initMethodOpt.get().typeDescriptor().params().orElse(List.of())) {
             Optional<String> paramName = param.getName();
-            Optional<ClassSymbol> paramClass = paramClassResolver.apply(param.typeDescriptor());
-            if (paramName.isEmpty() || paramClass.isEmpty()) {
+            TypeSymbol rawType = CommonUtils.getRawType(param.typeDescriptor());
+            if (paramName.isEmpty() || !(rawType instanceof ClassSymbol paramClass)
+                    || !paramClassMatcher.test(paramClass)) {
                 continue;
             }
             String propertyKey = ParamUtils.removeLeadingSingleQuote(paramName.get());
@@ -1725,22 +1699,11 @@ public class AiUtils {
             if (property == null) {
                 continue;
             }
-            PropertyCodedata codedata = codedataBuilder.apply(paramClass.get(), property.codedata());
+            PropertyCodedata codedata = codedataBuilder.apply(paramClass, property.codedata());
             if (codedata != null) {
                 properties.put(propertyKey, copyPropertyWithCodedata(property, codedata));
             }
         }
-    }
-
-    private static Optional<ClassSymbol> getAgentClass(TypeSymbol typeSymbol) {
-        return classForType(typeSymbol).filter(classSymbol -> CommonUtils.isAgentClass(classSymbol)
-                || CommonUtils.isAiFixedTypedAgent(classSymbol)
-                || CommonUtils.isAiDependentlyTypedAgent(classSymbol));
-    }
-
-    private static Optional<ClassSymbol> classForType(TypeSymbol typeSymbol) {
-        TypeSymbol rawType = CommonUtils.getRawType(typeSymbol);
-        return rawType instanceof ClassSymbol classSymbol ? Optional.of(classSymbol) : Optional.empty();
     }
 
     private static PropertyCodedata buildParamCodedata(ClassSymbol parameterClass, PropertyCodedata existing,
