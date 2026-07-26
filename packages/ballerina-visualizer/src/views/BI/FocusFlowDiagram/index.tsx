@@ -42,7 +42,6 @@ import {
     ParentMetadata,
     UpdatedArtifactsResponse,
     NodePosition,
-    LinePosition,
     NodeMetadata,
     FOCUS_FLOW_DIAGRAM_VIEW,
     FocusFlowDiagramView
