@@ -86,8 +86,8 @@ export function AgentPromptDisplay({ role, instructions }: AgentPromptDisplayPro
     const fields = PROMPT_FIELDS.filter((field) => values[field.key]);
 
     useEffect(() => {
-        fields.forEach((field) => form.setValue(field.key, values[field.key], { shouldDirty: false }));
-    }, [values.role, values.instructions]);
+        PROMPT_FIELDS.forEach((field) => form.setValue(field.key, values[field.key], { shouldDirty: false }));
+    }, [form, values.role, values.instructions]);
 
     if (fields.length === 0) {
         return null;

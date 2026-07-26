@@ -865,7 +865,7 @@ export function BIFocusFlowDiagram(props: BIFocusFlowDiagramProps) {
         onModelSelect: isAgentType ? handleEditAgentTypeModel : handleEditAgentModel,
         onRefresh: (position) => { void (isAgentType ? getAgentTypeModel(position) : getAgentModel(position)); },
         onLoadingChange: setShowProgressIndicator,
-        onAgentCreated: () => { suppressAgentReloadRef.current = true; },
+        onAgentCreated: () => { (isAgentType ? suppressAgentTypeReloadRef : suppressAgentReloadRef).current = true; },
         resolveAgentNode: (node) => agentDeclRef.current ?? node,
     });
 
@@ -1026,51 +1026,30 @@ export function BIFocusFlowDiagram(props: BIFocusFlowDiagramProps) {
                 </>
             );
         }
-        if (agentPanel === "FORM") {
-            if (isAgent && agentDeclRef.current) {
-                return (
-                    <FlowNodeForm
-                        key={agentFormKey}
-                        fileName={model?.fileName || ""}
-                        node={agentDeclRef.current}
-                        nodeFormTemplate={agentDeclRef.current}
-                        targetLineRange={agentDeclRef.current.codedata?.lineRange as any}
-                        projectPath={projectPath}
-                        editForm={true}
-                        onSubmit={handleSubmitAgentForm}
-                        submitText={showProgressIndicator ? "Saving..." : "Save"}
-                        showProgressIndicator={showProgressIndicator}
-                        disableSaveButton={showProgressIndicator}
-                        fieldOverrides={{
-                            model: { hidden: true },
-                            type: { hidden: true },
-                            variable: { label: "Agent Name", documentation: "Name of the agent" },
-                        }}
-                    />
-                );
-            }
-            if (isAgentType && agentDeclRef.current) {
-                return (
-                    <FlowNodeForm
-                        key={agentFormKey}
-                        fileName={model?.fileName || ""}
-                        node={agentTypeFormNode}
-                        nodeFormTemplate={agentTypeFormNode}
-                        targetLineRange={agentDeclRef.current.codedata?.lineRange as any}
-                        projectPath={projectPath}
-                        editForm={true}
-                        onSubmit={handleSubmitAgentForm}
-                        submitText={showProgressIndicator ? "Saving..." : "Save"}
-                        showProgressIndicator={showProgressIndicator}
-                        disableSaveButton={showProgressIndicator}
-                        fieldOverrides={buildAgentTypeFieldOverrides(agentDeclRef.current, agentTypeFormMode)}
-                        injectedComponents={agentTypePromptInjection}
-                        hideInfoBanner={Boolean(agentTypePromptInjection)}
-                        onConnectionCreated={() => { suppressAgentTypeReloadRef.current = true; }}
-                    />
-                );
-            }
-            return null;
+        if (agentPanel === "FORM" && agentDeclRef.current) {
+            const node = isAgentType ? agentTypeFormNode : agentDeclRef.current;
+            const fieldOverrides = isAgentType
+                ? buildAgentTypeFieldOverrides(agentDeclRef.current, agentTypeFormMode)
+                : { model: { hidden: true }, type: { hidden: true }, variable: { label: "Agent Name", documentation: "Name of the agent" } };
+            return (
+                <FlowNodeForm
+                    key={agentFormKey}
+                    fileName={model?.fileName || ""}
+                    node={node}
+                    nodeFormTemplate={node}
+                    targetLineRange={agentDeclRef.current.codedata?.lineRange as any}
+                    projectPath={projectPath}
+                    editForm={true}
+                    onSubmit={handleSubmitAgentForm}
+                    submitText={showProgressIndicator ? "Saving..." : "Save"}
+                    showProgressIndicator={showProgressIndicator}
+                    disableSaveButton={showProgressIndicator}
+                    fieldOverrides={fieldOverrides}
+                    injectedComponents={isAgentType ? agentTypePromptInjection : undefined}
+                    hideInfoBanner={isAgentType && Boolean(agentTypePromptInjection)}
+                    onConnectionCreated={isAgentType ? () => { suppressAgentTypeReloadRef.current = true; } : undefined}
+                />
+            );
         }
         return agentEditor.view !== "NONE" ? <AgentEditorPanelContent controller={agentEditor} /> : null;
     };
