@@ -1467,7 +1467,8 @@ public class AiUtils {
                     }
                 }
             }
-        } catch (Throwable t) {
+        } catch (RuntimeException e) {
+            LOGGER.log(Level.FINE, "Failed to resolve workspace projects", e);
         }
         return projects;
     }
@@ -1508,7 +1509,7 @@ public class AiUtils {
     private static boolean hasAiAnnotation(List<AnnotationAttachmentSymbol> annotations, String annotName) {
         return annotations.stream().anyMatch(annot -> annot.typeDescriptor().nameEquals(annotName)
                 && annot.typeDescriptor().getModule().map(ModuleSymbol::id)
-                        .filter(id -> CommonUtils.isAiModule(id.orgName(), id.packageName())).isPresent());
+                .filter(id -> CommonUtils.isAiModule(id.orgName(), id.packageName())).isPresent());
     }
 
     public static String getToolDisplayIcon(MethodSymbol method) {
@@ -1560,7 +1561,10 @@ public class AiUtils {
 
     private static Optional<AgentInfo> readAgentMetadata(ClassSymbol classSymbol) {
         for (AnnotationAttachmentSymbol annot : classSymbol.annotAttachments()) {
-            if (!annot.typeDescriptor().nameEquals(DISPLAY_ANNOT) || annot.attachmentValue().isEmpty()
+            if (!annot.typeDescriptor().nameEquals(DISPLAY_ANNOT)
+                    || annot.typeDescriptor().getModule().map(ModuleSymbol::id)
+                    .filter(id -> CommonUtils.isAiModule(id.orgName(), id.packageName())).isEmpty()
+                    || annot.attachmentValue().isEmpty()
                     || !(unwrapConstant(annot.attachmentValue().get()) instanceof Map<?, ?> displayMap)) {
                 continue;
             }
@@ -1872,7 +1876,8 @@ public class AiUtils {
                         return Optional.of(classSymbol);
                     }
                 }
-            } catch (Throwable t) {
+            } catch (RuntimeException e) {
+                LOGGER.log(Level.FINE, "Failed to resolve workspace class", e);
             }
         }
         try {
@@ -1886,7 +1891,8 @@ public class AiUtils {
                     }
                 }
             }
-        } catch (Throwable t) {
+        } catch (RuntimeException e) {
+            LOGGER.log(Level.FINE, "Failed to resolve central class", e);
         }
         return Optional.empty();
     }

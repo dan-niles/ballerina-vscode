@@ -83,7 +83,6 @@ public class AgentSearchCommand extends SearchCommand {
     private static final String SOURCE_LOCAL = "local";
 
     private List<Item> cachedDefaultAgents;
-    private List<AvailableNode> cachedCentralAgents;
     private List<AvailableNode> cachedLandingAgents;
     private final String orgName;
     private final String source;
@@ -213,11 +212,6 @@ public class AgentSearchCommand extends SearchCommand {
 
 
     private List<AvailableNode> fetchAgentsFromCentral(String searchQuery, String org) {
-        boolean cacheable = (searchQuery == null || searchQuery.isEmpty()) && org == null;
-        if (cachedCentralAgents != null && cacheable) {
-            return cachedCentralAgents;
-        }
-
         List<AvailableNode> agents = new ArrayList<>();
         try {
             PackageResponse response = getPackageResponse(searchQuery, org);
@@ -225,9 +219,6 @@ public class AgentSearchCommand extends SearchCommand {
                 for (PackageResponse.Package pkg : response.packages()) {
                     agents.add(generateCentralAgentNode(pkg));
                 }
-            }
-            if (cacheable) {
-                cachedCentralAgents = agents;
             }
         } catch (RuntimeException ignored) {
         }
@@ -356,7 +347,7 @@ public class AgentSearchCommand extends SearchCommand {
                 .build();
 
         Codedata codedata = new Codedata.Builder<>(null)
-                .node(NodeKind.TYPED_AGENT)
+                .node(CommonUtils.isAgentClass(classSymbol) ? NodeKind.AGENT : NodeKind.TYPED_AGENT)
                 .org(moduleId.orgName())
                 .module(moduleId.moduleName())
                 .packageName(moduleId.packageName())

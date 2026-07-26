@@ -59,6 +59,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -113,10 +114,8 @@ public final class ClassMemberManager {
                 .ifPresent(node -> addEdit(edits, filePath, new TextEdit(toRange(node.lineRange()), "")));
         Optional<ClassDefinitionNode> generatedToolKit = fieldType == null
                 ? Optional.empty() : findGeneratedToolKitClass(context.modulePart(), fieldType);
-        if (generatedToolKit.isPresent()) {
-            removeToolFromList(context.classDefinition(), fieldName)
-                    .ifPresent(edit -> addEdit(edits, filePath, edit));
-        }
+        removeToolFromList(context.classDefinition(), fieldName)
+                .ifPresent(edit -> addEdit(edits, filePath, edit));
         if (generatedToolKit.isPresent()
                 && !isFieldTypeUsedByAnotherField(context.modulePart(), fieldType, fieldName)) {
             addEdit(edits, filePath, new TextEdit(toRange(generatedToolKit.get().lineRange()), ""));
@@ -357,35 +356,40 @@ public final class ClassMemberManager {
             return Optional.empty();
         }
         String element = "self." + fieldName;
-        List<String> retained = toolsList.expressions().stream()
-                .map(expression -> expression.toSourceCode())
-                .map(String::trim)
-                .filter(tool -> !element.equals(tool))
-                .toList();
-        if (retained.size() == toolsList.expressions().size()) {
-            return Optional.empty();
+        for (int index = 0; index < toolsList.expressions().size(); index++) {
+            if (!element.equals(toolsList.expressions().get(index).toSourceCode().trim())) {
+                continue;
+            }
+            LineRange range = toolsList.expressions().get(index).lineRange();
+            if (toolsList.expressions().size() > 1) {
+                if (index < toolsList.expressions().size() - 1) {
+                    range = LineRange.from(range.fileName(), range.startLine(),
+                            toolsList.expressions().getSeparator(index).lineRange().endLine());
+                } else {
+                    range = LineRange.from(range.fileName(),
+                            toolsList.expressions().getSeparator(index - 1).lineRange().startLine(), range.endLine());
+                }
+            }
+            return Optional.of(new TextEdit(toRange(range), ""));
         }
-        return Optional.of(new TextEdit(toRange(toolsList.lineRange()), "[" + String.join(", ", retained) + "]"));
+        return Optional.empty();
     }
 
     private static ListConstructorExpressionNode findInnerToolsList(ClassDefinitionNode classDefinition) {
-        for (Node member : classDefinition.members()) {
-            if (!(member instanceof FunctionDefinitionNode function) || !"init".equals(function.functionName().text())
-                    || !(function.functionBody() instanceof FunctionBodyBlockNode body)) {
-                continue;
-            }
-            for (StatementNode statement : body.statements()) {
-                ListConstructorExpressionNode tools = extractToolsFromAssignment(statement);
-                if (tools != null) {
-                    return tools;
-                }
-            }
-        }
-        return null;
+        return findInit(classDefinition)
+                .filter(function -> function.functionBody() instanceof FunctionBodyBlockNode)
+                .map(function -> (FunctionBodyBlockNode) function.functionBody())
+                .stream()
+                .flatMap(body -> body.statements().stream())
+                .map(ClassMemberManager::extractToolsFromAssignment)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
     }
 
     private static ListConstructorExpressionNode extractToolsFromAssignment(StatementNode statement) {
-        if (!(statement instanceof AssignmentStatementNode assignment)) {
+        if (!(statement instanceof AssignmentStatementNode assignment)
+                || !"self.agent".equals(assignment.varRef().toSourceCode().trim())) {
             return null;
         }
         ExpressionNode expression = assignment.expression();

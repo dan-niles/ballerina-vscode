@@ -222,11 +222,10 @@ public class ModelGenerator {
 
     private boolean isInnerAgentAssignment(AssignmentStatementNode assignment, ClassSymbol classSymbol) {
         String variableReference = assignment.varRef().toSourceCode().replaceAll("\\s", "");
-        if (!variableReference.startsWith("self.")) {
+        if (!"self.agent".equals(variableReference)) {
             return false;
         }
-        ClassFieldSymbol fieldSymbol = classSymbol.fieldDescriptors()
-                .get(variableReference.substring("self.".length()));
+        ClassFieldSymbol fieldSymbol = classSymbol.fieldDescriptors().get("agent");
         if (fieldSymbol == null) {
             return false;
         }
