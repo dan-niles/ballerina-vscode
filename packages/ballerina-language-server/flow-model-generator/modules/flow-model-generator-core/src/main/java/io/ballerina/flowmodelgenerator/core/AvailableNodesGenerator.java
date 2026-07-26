@@ -186,7 +186,9 @@ public class AvailableNodesGenerator {
                     return List.of();
                 }
                 Optional<Symbol> classSymbol = semanticModel.symbol((ClassDefinitionNode) node);
-                if (classSymbol.isPresent() && classSymbol.get() instanceof ClassSymbol resolvedClassSymbol) {
+                if (classSymbol.isPresent() && classSymbol.get() instanceof ClassSymbol resolvedClassSymbol
+                        && (isAiFixedTypedAgent(resolvedClassSymbol)
+                        || isAiDependentlyTypedAgent(resolvedClassSymbol))) {
                     return new ArrayList<>(resolvedClassSymbol.fieldDescriptors().values());
                 }
                 return List.of();

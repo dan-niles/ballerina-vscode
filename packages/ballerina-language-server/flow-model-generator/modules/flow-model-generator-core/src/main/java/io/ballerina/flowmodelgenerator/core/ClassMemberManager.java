@@ -31,6 +31,7 @@ import io.ballerina.compiler.syntax.tree.ModulePartNode;
 import io.ballerina.compiler.syntax.tree.NamedArgumentNode;
 import io.ballerina.compiler.syntax.tree.Node;
 import io.ballerina.compiler.syntax.tree.NonTerminalNode;
+import io.ballerina.compiler.syntax.tree.ObjectFieldNode;
 import io.ballerina.compiler.syntax.tree.ReturnTypeDescriptorNode;
 import io.ballerina.compiler.syntax.tree.SeparatedNodeList;
 import io.ballerina.compiler.syntax.tree.StatementNode;
@@ -106,8 +107,8 @@ public final class ClassMemberManager {
                                                     String fieldName, LineRange classLineRange) {
         ClassContext context = loadContext(workspaceManager, filePath, classLineRange);
         Map<Path, List<TextEdit>> edits = new HashMap<>();
-        Optional<Node> field = findField(context.classDefinition(), fieldName);
-        String fieldType = field.map(node -> extractFieldType(node.toSourceCode(), fieldName)).orElse(null);
+        Optional<ObjectFieldNode> field = findField(context.classDefinition(), fieldName);
+        String fieldType = field.map(node -> node.typeName().toSourceCode().strip()).orElse(null);
 
         field.ifPresent(node -> addEdit(edits, filePath, new TextEdit(toRange(node.lineRange()), "")));
         findAssignment(context.classDefinition(), fieldName)
@@ -311,10 +312,11 @@ public final class ClassMemberManager {
         return Optional.empty();
     }
 
-    private static Optional<Node> findField(ClassDefinitionNode classDefinition, String fieldName) {
-        Pattern fieldPattern = Pattern.compile("(?s).*\\b" + Pattern.quote(fieldName) + "\\s*;\\s*");
+    private static Optional<ObjectFieldNode> findField(ClassDefinitionNode classDefinition, String fieldName) {
         return classDefinition.members().stream()
-                .filter(member -> fieldPattern.matcher(member.toSourceCode()).matches())
+                .filter(ObjectFieldNode.class::isInstance)
+                .map(ObjectFieldNode.class::cast)
+                .filter(field -> fieldName.equals(field.fieldName().text().trim()))
                 .findFirst();
     }
 
@@ -416,29 +418,16 @@ public final class ClassMemberManager {
         return null;
     }
 
-    private static String extractFieldType(String fieldSource, String fieldName) {
-        Pattern pattern = Pattern.compile("(?s).*\\bfinal\\s+(.+?)\\s+" + Pattern.quote(fieldName) + "\\s*;.*");
-        Matcher matcher = pattern.matcher(fieldSource);
-        if (matcher.matches()) {
-            return matcher.group(1).strip();
-        }
-        pattern = Pattern.compile("(?s).*\\b(.+?)\\s+" + Pattern.quote(fieldName) + "\\s*;.*");
-        matcher = pattern.matcher(fieldSource);
-        if (!matcher.matches()) {
-            return null;
-        }
-        return matcher.group(1).replace("private", "").strip();
-    }
-
     private static boolean isFieldTypeUsedByAnotherField(ModulePartNode modulePart, String fieldType,
                                                           String fieldName) {
-        Pattern fieldPattern = Pattern.compile("(?s).*\\b" + Pattern.quote(fieldType)
-                + "\\s+(?!\\Q" + fieldName + "\\E\\b)\\w+\\s*;.*");
         return modulePart.members().stream()
                 .filter(ClassDefinitionNode.class::isInstance)
                 .map(ClassDefinitionNode.class::cast)
                 .flatMap(classDefinition -> classDefinition.members().stream())
-                .anyMatch(member -> fieldPattern.matcher(member.toSourceCode()).matches());
+                .filter(ObjectFieldNode.class::isInstance)
+                .map(ObjectFieldNode.class::cast)
+                .anyMatch(field -> !fieldName.equals(field.fieldName().text().trim())
+                        && fieldType.equals(field.typeName().toSourceCode().strip()));
     }
 
     private static Optional<ClassDefinitionNode> findGeneratedToolKitClass(ModulePartNode modulePart,

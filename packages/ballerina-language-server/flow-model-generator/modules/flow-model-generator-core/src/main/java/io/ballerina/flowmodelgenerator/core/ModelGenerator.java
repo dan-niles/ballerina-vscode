@@ -312,7 +312,8 @@ public class ModelGenerator {
         }
 
         Optional<Symbol> symbol = semanticModel.symbol(classDefinitionNode);
-        if (symbol.isEmpty() || !(symbol.get() instanceof ClassSymbol classSymbol)) {
+        if (symbol.isEmpty() || !(symbol.get() instanceof ClassSymbol classSymbol)
+                || !(isAiFixedTypedAgent(classSymbol) || isAiDependentlyTypedAgent(classSymbol))) {
             return gson.toJsonTree(new ExtendedDiagram(filePath.toString(), List.of(), List.of(), List.of()));
         }
 
