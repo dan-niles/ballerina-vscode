@@ -112,10 +112,7 @@ const PackageSettingsButton = styled.button`
     font-weight: 600;
 `;
 
-const PackageSettingsContent = styled.div`
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
+const PackageSettingsContent = styled(LibraryDetails)`
     margin-top: 16px;
 `;
 
