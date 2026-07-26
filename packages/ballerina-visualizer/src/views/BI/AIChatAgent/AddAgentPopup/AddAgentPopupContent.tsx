@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Codicon, Icon } from "@wso2/ui-toolkit";
 import { ConnectorIcon } from "@wso2/bi-diagram";
 import { AvailableNode, EVENT_TYPE, FlowNode, LineRange } from "@wso2/ballerina-core";
@@ -101,6 +101,8 @@ export function AddAgentPopupContent(props: AddAgentPopupContentProps) {
     const [agents, setAgents] = useState<AvailableNode[]>([]);
     const [isSearching, setIsSearching] = useState<boolean>(false);
     const [isWorkspace, setIsWorkspace] = useState<boolean>(false);
+    const searchRequestRef = useRef(0);
+    const previousFilterRef = useRef<AgentFilter | undefined>(undefined);
 
     useEffect(() => {
         let cancelled = false;
@@ -167,6 +169,7 @@ export function AddAgentPopupContent(props: AddAgentPopupContentProps) {
     }, [view, pendingAgent, rpcClient, projectPath]);
 
     const runSearch = (text: string, filter: AgentFilter) => {
+        const request = ++searchRequestRef.current;
         setIsSearching(true);
         rpcClient
             .getBIDiagramRpcClient()
@@ -180,29 +183,34 @@ export function AddAgentPopupContent(props: AddAgentPopupContentProps) {
                 searchKind: "AGENT",
             })
             .then((model) => {
-                setAgents((model.categories ?? []).flatMap((category) => (category.items ?? []) as AvailableNode[]));
+                if (request === searchRequestRef.current) {
+                    setAgents((model.categories ?? []).flatMap((category) => (category.items ?? []) as AvailableNode[]));
+                }
             })
             .finally(() => {
-                setIsSearching(false);
+                if (request === searchRequestRef.current) {
+                    setIsSearching(false);
+                }
             });
     };
 
-    const debouncedSearch = debounce((text: string) => runSearch(text, filterType), 1100);
+    const debouncedSearch = debounce((text: string, filter: AgentFilter) => runSearch(text, filter), 1100);
 
     useEffect(() => {
         if (view !== "gallery") {
+            previousFilterRef.current = undefined;
             return;
         }
-        runSearch(searchText, filterType);
-    }, [view, filterType, rpcClient, projectPath]);
-
-    useEffect(() => {
-        if (view !== "gallery") {
+        const filterChanged = previousFilterRef.current !== filterType;
+        previousFilterRef.current = filterType;
+        if (!searchText || filterChanged) {
+            runSearch(searchText, filterType);
             return;
         }
-        debouncedSearch(searchText);
+        searchRequestRef.current += 1;
+        debouncedSearch(searchText, filterType);
         return () => debouncedSearch.cancel();
-    }, [searchText]);
+    }, [view, searchText, filterType, rpcClient, projectPath]);
 
     const handleCustomAgent = () => {
         onPendingAgentChange(undefined);

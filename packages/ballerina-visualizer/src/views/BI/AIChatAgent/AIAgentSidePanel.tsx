@@ -407,6 +407,7 @@ export interface BIFlowDiagramProps {
     onSubmit: (data: ExtendedAgentToolRequest) => void | Promise<void>;
     mode?: NewToolSelectionMode;
     onViewChange?: (view: SidePanelView, navigateBack?: () => void) => void;
+    onAgentToolCreated?: (functionName: string) => void;
     onCancel?: () => void;
     connectionDependency?: ConnectionDependencyConfig;
 }
@@ -477,7 +478,7 @@ const INITIAL_FIELDS: FormField[] = [
 ];
 
 export function AIAgentSidePanel(props: BIFlowDiagramProps) {
-    const { agentNode, projectPath, onSubmit, mode = NewToolSelectionMode.ALL, onViewChange, connectionDependency } = props;
+    const { agentNode, projectPath, onSubmit, mode = NewToolSelectionMode.ALL, onViewChange, onAgentToolCreated, onCancel, connectionDependency } = props;
     const { rpcClient } = useRpcContext();
     const dependencyMode = Boolean(connectionDependency);
 
@@ -535,6 +536,14 @@ export function AIAgentSidePanel(props: BIFlowDiagramProps) {
         fetchNodes();
     }, []);
 
+    const hasAutoTriggered = useRef(false);
+    useEffect(() => {
+        if (mode === NewToolSelectionMode.CUSTOM_TOOL && !loading && !hasAutoTriggered.current) {
+            hasAutoTriggered.current = true;
+            handleOnAddFunction(MACHINE_VIEW.BIAgentToolForm, DIRECTORY_MAP.AGENT_TOOL);
+        }
+    }, [loading]);
+
     useEffect(() => {
         if (sidePanelView === SidePanelView.TOOL_FORM) {
             onViewChange?.(SidePanelView.TOOL_FORM, () => {
@@ -569,6 +578,14 @@ export function AIAgentSidePanel(props: BIFlowDiagramProps) {
     useEffect(() => {
         rpcClient.onParentPopupSubmitted((parent: ParentPopupData) => {
             console.log(">>> on parent popup submitted", parent);
+            if (parent.artifactType === DIRECTORY_MAP.AGENT_TOOL && parent.recentIdentifier) {
+                onAgentToolCreated?.(parent.recentIdentifier);
+                return;
+            }
+            if (mode === NewToolSelectionMode.CUSTOM_TOOL && parent.artifactType === DIRECTORY_MAP.AGENT_TOOL) {
+                onCancel?.();
+                return;
+            }
             setLoading(true);
             fetchNodes();
         });
@@ -576,6 +593,11 @@ export function AIAgentSidePanel(props: BIFlowDiagramProps) {
 
     const fetchNodes = async () => {
         setLoading(true);
+
+        if (mode === NewToolSelectionMode.CUSTOM_TOOL) {
+            setLoading(false);
+            return;
+        }
 
         // FUNCTION mode: skip getAvailableNodes entirely — connections are not needed
         if (mode === NewToolSelectionMode.FUNCTION) {
@@ -1059,11 +1081,11 @@ export function AIAgentSidePanel(props: BIFlowDiagramProps) {
                 field,
                 classLineRange: connectionDependency.classLineRange,
             });
-        } catch (error) {
+        } catch {
             pendingDependencyRefreshRef.current = false;
             addedDepNamesRef.current = addedDepNamesRef.current.filter((name) => name !== dependencyName);
             setDepSaving(false);
-            console.error(">>> Error adding connection dependency", error);
+            setDepNameError("Unable to add the connection parameter. Try again.");
         }
     };
 
