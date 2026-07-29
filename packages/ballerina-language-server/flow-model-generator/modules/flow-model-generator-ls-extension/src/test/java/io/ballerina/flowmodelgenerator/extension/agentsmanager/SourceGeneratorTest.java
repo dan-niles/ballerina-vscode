@@ -53,10 +53,9 @@ public class SourceGeneratorTest extends AbstractLSTest {
         return new Object[][]{
                 {Path.of("agent_source.json")},
                 {Path.of("agent_source_ballerina.json")},
-                {Path.of("agent_source_hide_td.json")},
+                // Agent calls are only supported for existing agent definitions. The legacy agent-as-a-tool
+                // generation cases are intentionally not applicable to ballerina/ai.
                 {Path.of("agent_call_source_ballerina.json")},
-                {Path.of("agent_call_source_with_backticks.json")},
-                {Path.of("agent_call_source_with_variables.json")},
                 {Path.of("agent_model_source_ballerina.json")},
                 {Path.of("agent_model_source_default.json")},
                 {Path.of("memory_manager_source.json")}

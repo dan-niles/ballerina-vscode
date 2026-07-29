@@ -449,7 +449,7 @@
             "advanced": false,
             "hidden": false,
             "codedata": {
-              "kind": "REQUIRED"
+              "kind": "DEFAULTABLE"
             },
             "defaultValue": ""
           },
@@ -477,7 +477,7 @@
             "advanced": false,
             "hidden": false,
             "codedata": {
-              "kind": "REQUIRED"
+              "kind": "DEFAULTABLE"
             },
             "defaultValue": ""
           },
@@ -567,7 +567,45 @@
         "metadata": {
           "label": "Agent",
           "description": "Represents an agent.",
-          "icon": "https://bcentral-packageicons.azureedge.net/images/ballerinax_ai_1.0.1.png"
+          "icon": "https://bcentral-packageicons.azureedge.net/images/ballerinax_ai_1.0.1.png",
+          "data": {
+            "agentInfo": {
+              "systemPrompt": {
+                "instructions": "\"Help the students with their questions.\"",
+                "role": "\"Math tutor\""
+              },
+              "memory": {
+                "presentation": {
+                  "type": "ai:MessageWindowChatMemory",
+                  "size": "10"
+                }
+              },
+              "modelProvider": {
+                "presentation": {
+                  "name": "myModel",
+                  "path": "https://bcentral-packageicons.azureedge.net/images/ballerinax_ai_1.0.1.png",
+                  "type": "AzureOpenAiProvider"
+                }
+              },
+              "tools": [
+                {
+                  "name": "set",
+                  "path": "/path/icon.png",
+                  "description": "The `Client.get()` function can be used to send HTTP GET requests to HTTP endpoints."
+                },
+                {
+                  "name": "sum",
+                  "path": "",
+                  "description": ""
+                },
+                {
+                  "name": "mutiply",
+                  "path": "",
+                  "description": ""
+                }
+              ]
+            }
+          }
         },
         "codedata": {
           "node": "AGENT",
@@ -586,7 +624,9 @@
               "offset": 2
             }
           },
-          "sourceCode": "// final MockLlm model = new;\nfinal ai:Agent agent = check new (model = myModel,\n    systemPrompt = {role: \"Math tutor\", instructions: \"Help the students with their questions.\"},\n    tools = [set, sum, mutiply], agentType = ai:REACT_AGENT\n);"
+          "sourceCode": "// final MockLlm model = new;\nfinal ai:Agent agent = check new (model = myModel,\n    systemPrompt = {role: \"Math tutor\", instructions: \"Help the students with their questions.\"},\n    tools = [set, sum, mutiply], agentType = ai:REACT_AGENT\n);",
+          "packageName": "ai",
+          "version": "1.0.1"
         },
         "returning": false,
         "properties": {

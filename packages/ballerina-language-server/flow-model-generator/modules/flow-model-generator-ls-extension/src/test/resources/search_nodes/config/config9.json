@@ -15,7 +15,23 @@
       "metadata": {
         "label": "Agent",
         "description": "Represents an agent.",
-        "icon": "https://bcentral-packageicons.azureedge.net/images/ballerina_ai_1.12.0.png"
+        "icon": "https://bcentral-packageicons.azureedge.net/images/ballerina_ai_1.12.0.png",
+        "data": {
+          "agentInfo": {
+            "systemPrompt": {
+              "instructions": "",
+              "role": "\"\""
+            },
+            "modelProvider": {
+              "presentation": {
+                "name": "_salesAgentModel",
+                "path": "https://bcentral-packageicons.azureedge.net/images/ballerina_ai_1.13.0.png",
+                "type": "Wso2ModelProvider"
+              }
+            },
+            "tools": []
+          }
+        }
       },
       "codedata": {
         "node": "AGENT",
@@ -34,7 +50,9 @@
             "offset": 10
           }
         },
-        "sourceCode": "self._salesAgentAgent = check new (\n            systemPrompt = {role: \"\", instructions: string ``}, model = self._salesAgentModel, tools = []\n        );"
+        "sourceCode": "self._salesAgentAgent = check new (\n            systemPrompt = {role: \"\", instructions: string ``}, model = self._salesAgentModel, tools = []\n        );",
+        "packageName": "ai",
+        "version": "1.13.0"
       },
       "returning": false,
       "properties": {

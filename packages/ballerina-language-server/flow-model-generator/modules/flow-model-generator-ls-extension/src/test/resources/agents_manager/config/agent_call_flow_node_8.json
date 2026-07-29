@@ -511,7 +511,7 @@
             "advanced": false,
             "hidden": false,
             "codedata": {
-              "kind": "REQUIRED"
+              "kind": "DEFAULTABLE"
             },
             "defaultValue": ""
           },
@@ -539,7 +539,7 @@
             "advanced": false,
             "hidden": false,
             "codedata": {
-              "kind": "REQUIRED"
+              "kind": "DEFAULTABLE"
             },
             "defaultValue": ""
           },
@@ -682,7 +682,15 @@
         "metadata": {
           "label": "Agent",
           "description": "Represents an agent.",
-          "icon": "https://bcentral-packageicons.azureedge.net/images/ballerina_ai_1.12.0.png"
+          "icon": "https://bcentral-packageicons.azureedge.net/images/ballerina_ai_1.12.0.png",
+          "data": {
+            "agentInfo": {
+              "systemPrompt": {
+                "instructions": "Help users with weather and time queries.",
+                "role": "Assistant"
+              }
+            }
+          }
         },
         "codedata": {
           "node": "AGENT",
@@ -701,7 +709,9 @@
               "offset": 2
             }
           },
-          "sourceCode": "final ai:Agent chatAgent = check new (\n    systemPrompt = {role: string `Assistant`, instructions: string `Help users with weather and time queries.`}\n);"
+          "sourceCode": "final ai:Agent chatAgent = check new (\n    systemPrompt = {role: string `Assistant`, instructions: string `Help users with weather and time queries.`}\n);",
+          "packageName": "ai",
+          "version": "1.13.0"
         },
         "returning": false,
         "properties": {

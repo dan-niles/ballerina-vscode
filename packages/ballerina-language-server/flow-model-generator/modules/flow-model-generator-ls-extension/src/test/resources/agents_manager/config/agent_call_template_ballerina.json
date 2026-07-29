@@ -34,43 +34,6 @@
     },
     "returning": false,
     "properties": {
-      "systemPrompt": {
-        "metadata": {
-          "label": "System Prompt",
-          "description": "The system prompt assigned to the agent"
-        },
-        "types": [
-          {
-            "fieldType": "RECORD_MAP_EXPRESSION",
-            "ballerinaType": "ai:SystemPrompt",
-            "typeMembers": [
-              {
-                "type": "SystemPrompt",
-                "packageInfo": "ballerina:ai:1.0.0",
-                "packageName": "ai",
-                "kind": "RECORD_TYPE",
-                "selected": false
-              }
-            ],
-            "selected": false
-          },
-          {
-            "fieldType": "EXPRESSION",
-            "ballerinaType": "ai:SystemPrompt",
-            "selected": false
-          }
-        ],
-        "placeholder": "{role: \"\", instructions: \"\"}",
-        "optional": false,
-        "editable": true,
-        "advanced": false,
-        "hidden": true,
-        "codedata": {
-          "kind": "INCLUDED_FIELD",
-          "originalName": "systemPrompt"
-        },
-        "defaultValue": "{role: \"\", instructions: \"\"}"
-      },
       "model": {
         "metadata": {
           "label": "Model",
@@ -93,61 +56,6 @@
           "originalName": "model"
         },
         "defaultValue": "object {}"
-      },
-      "tools": {
-        "metadata": {
-          "label": "Tools",
-          "description": "The tools available for the agent"
-        },
-        "types": [
-          {
-            "fieldType": "REPEATABLE_LIST",
-            "ballerinaType": "(ai:BaseToolKit|ai:ToolConfig|ai:FunctionTool)[]",
-            "template": {
-              "types": [
-                {
-                  "fieldType": "RECORD_MAP_EXPRESSION",
-                  "ballerinaType": "ai:ToolConfig",
-                  "typeMembers": [
-                    {
-                      "type": "ToolConfig",
-                      "packageInfo": "ballerina:ai:1.0.0",
-                      "packageName": "ai",
-                      "kind": "RECORD_TYPE",
-                      "selected": false
-                    }
-                  ],
-                  "selected": false
-                },
-                {
-                  "fieldType": "EXPRESSION",
-                  "ballerinaType": "ai:BaseToolKit|ai:ToolConfig|ai:FunctionTool",
-                  "selected": false
-                }
-              ],
-              "optional": false,
-              "editable": false,
-              "advanced": false,
-              "hidden": false
-            },
-            "selected": false
-          },
-          {
-            "fieldType": "EXPRESSION",
-            "ballerinaType": "(ai:BaseToolKit|ai:ToolConfig|ai:FunctionTool)[]",
-            "selected": false
-          }
-        ],
-        "placeholder": "[]",
-        "optional": true,
-        "editable": true,
-        "advanced": true,
-        "hidden": true,
-        "codedata": {
-          "kind": "INCLUDED_FIELD",
-          "originalName": "tools"
-        },
-        "defaultValue": "[]"
       },
       "maxIter": {
         "metadata": {
@@ -176,34 +84,6 @@
           "originalName": "maxIter"
         },
         "defaultValue": "INFER_TOOL_COUNT"
-      },
-      "verbose": {
-        "metadata": {
-          "label": "Verbose",
-          "description": "Specifies whether verbose logging is enabled"
-        },
-        "types": [
-          {
-            "fieldType": "FLAG",
-            "ballerinaType": "boolean",
-            "selected": false
-          },
-          {
-            "fieldType": "EXPRESSION",
-            "ballerinaType": "boolean",
-            "selected": false
-          }
-        ],
-        "placeholder": "false",
-        "optional": true,
-        "editable": true,
-        "advanced": true,
-        "hidden": false,
-        "codedata": {
-          "kind": "INCLUDED_FIELD",
-          "originalName": "verbose"
-        },
-        "defaultValue": "false"
       },
       "memory": {
         "metadata": {
@@ -281,23 +161,6 @@
         "advanced": true,
         "hidden": true
       },
-      "scope": {
-        "metadata": {
-          "label": "Connection Scope",
-          "description": "Scope of the connection, Global or Local"
-        },
-        "types": [
-          {
-            "fieldType": "ENUM",
-            "selected": true
-          }
-        ],
-        "value": "Global",
-        "optional": false,
-        "editable": true,
-        "advanced": true,
-        "hidden": true
-      },
       "role": {
         "metadata": {
           "label": "Role",
@@ -317,34 +180,6 @@
         ],
         "value": "",
         "placeholder": "e.g., Customer Support Assistant, Sales Advisor, Data Analyst",
-        "optional": true,
-        "editable": true,
-        "advanced": false,
-        "hidden": false,
-        "codedata": {
-          "kind": "REQUIRED"
-        },
-        "defaultValue": ""
-      },
-      "instructions": {
-        "metadata": {
-          "label": "Instructions",
-          "description": "Detailed instructions for the agent"
-        },
-        "types": [
-          {
-            "fieldType": "PROMPT",
-            "ballerinaType": "string",
-            "selected": true
-          },
-          {
-            "fieldType": "EXPRESSION",
-            "ballerinaType": "string",
-            "selected": false
-          }
-        ],
-        "value": "",
-        "placeholder": "e.g., You are a friendly assistant. Your goal is to...",
         "optional": true,
         "editable": true,
         "advanced": false,

@@ -38,6 +38,12 @@ import java.nio.file.Path;
 public class ServiceFieldNodesTest extends AbstractLSTest {
 
     @Override
+    protected String[] skipList() {
+        // This fixture exercises the deprecated ballerinax/ai Agent API.
+        return new String[]{"service_field_nodes.json"};
+    }
+
+    @Override
     @Test(dataProvider = "data-provider")
     public void test(Path config) throws IOException {
         Path configJsonPath = configDir.resolve(config);
