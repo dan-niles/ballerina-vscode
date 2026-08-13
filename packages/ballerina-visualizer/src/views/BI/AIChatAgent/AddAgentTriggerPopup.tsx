@@ -240,7 +240,7 @@ export function AddAgentTriggerPopup(props: AddAgentTriggerPopupProps) {
                                 {!isLoading && (
                                     <SearchBox
                                         value={searchQuery}
-                                        placeholder="Search channels"
+                                        placeholder="Search triggers"
                                         iconPosition="start"
                                         autoFocus
                                         onChange={setSearchQuery}
