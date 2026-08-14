@@ -178,7 +178,7 @@ export function CopilotHeroBox({ placeholder }: { placeholder: string }) {
                         openCopilot();
                     }
                 }}
-                aria-label={label ? `WSO2 Agent Builder Intelligence: ${label}. Open the Copilot chat.` : undefined}
+                aria-label={label ? `WSO2 Agent Builder Intelligence: ${label}. Open the WSO2 Agent Builder Intelligence chat.` : undefined}
             >
                 <OrbHolder>
                     {webglFailed ? (
@@ -204,7 +204,7 @@ export function CopilotHeroBox({ placeholder }: { placeholder: string }) {
                     <>
                         <StatusText>{label}</StatusText>
                         <OpenHint>
-                            Open Copilot <Codicon name="arrow-right" />
+                            Open WSO2 Agent Builder Intelligence <Codicon name="arrow-right" />
                         </OpenHint>
                     </>
                 ) : (
