@@ -31,6 +31,7 @@ import {
     SpinArc,
     HERO_GLOW,
     ambientGlow,
+    frameTriple,
     IconOverlay,
     AGENT_BUILDER_ORB_COLORS,
     ORB_ENERGY,
@@ -50,34 +51,36 @@ const EXIT_MS = 680;
 // The run may never start (panel closed, command failed); don't strand the page on "Building".
 const RUN_START_TIMEOUT_MS = 10000;
 
+// Each prompt names a real system so it wires a trigger or connector the user can see on the
+// canvas, and must stand alone if sent unedited — no possessives ("our docs") to resolve.
 const EXAMPLES = [
     {
         name: "Customer Support",
         description: "Answers questions from your product docs",
         icon: "comment-discussion",
         prompt:
-            "Create a customer support agent that answers product questions using a knowledge base built from our documentation, and expose it as a chat service.",
+            "Create a customer support agent that answers product questions from a knowledge base built from Markdown and PDF documentation files, and says so when the answer is not in the docs.",
     },
     {
         name: "Issue Triager",
         description: "Triages new GitHub issues by priority",
         icon: "issues",
         prompt:
-            "Create an issue triage agent that reviews new GitHub issues, suggests a priority label and posts a short summary, triggered when an issue is opened.",
+            "Create an issue triage agent that adds a priority label to newly opened GitHub issues and posts a short summary as a comment. Add a GitHub trigger for issue events.",
     },
     {
         name: "Helpdesk Responder",
-        description: "Replies on WhatsApp or Telegram",
+        description: "Replies to incoming WhatsApp messages",
         icon: "device-mobile",
         prompt:
-            "Create a helpdesk agent that replies to incoming WhatsApp messages using our product documentation, and add a WhatsApp trigger for it.",
+            "Create a helpdesk agent that replies to incoming WhatsApp messages, answers common account and billing questions, and escalates anything it cannot resolve. Add a WhatsApp trigger for it.",
     },
     {
-        name: "Operations Assistant",
-        description: "Looks up records in internal services",
-        icon: "server-process",
+        name: "Sales Assistant",
+        description: "Looks up CRM records from Slack",
+        icon: "organization",
         prompt:
-            "Create an operations agent that calls our internal HTTP services as tools to look up records and answer questions about them.",
+            "Create a sales assistant agent that answers questions asked in Slack by looking up account and opportunity records in Salesforce as a tool, and replies in the same thread. Add a Slack trigger for it.",
     },
 ];
 
@@ -110,11 +113,6 @@ const auraBreathe = keyframes`
 `;
 
 const ACTIVE_GLOW = { outerSize: 40, outerStrength: 48, innerSize: 20, innerStrength: 30 };
-
-/** Frame-shaped [lighter, base, darker] triple, mirroring how ACCENT_FRAME is built from PRIMARY. */
-function glowColors(base: string): [string, string, string] {
-    return [`color-mix(in srgb, ${base} 72%, #ffffff)`, base, `color-mix(in srgb, ${base} 78%, #000000)`];
-}
 
 interface OrbHolderProps {
     $active?: boolean;
@@ -510,7 +508,7 @@ export function EmptyState({ onCreateFromScratch }: EmptyStateProps) {
     }, [showRun]);
 
     const orbColors = working ? AGENT_BUILDER_ORB_COLORS[state] : ACCENT_SPHERE;
-    const orbGlow = glowColors(orbColors[0]);
+    const orbGlow = frameTriple(orbColors[0]);
     const orbHighlight = working ? `color-mix(in srgb, ${orbColors[0]} 70%, transparent)` : ACCENT_CORE;
     const runHeading =
         state === "awaiting-input"
@@ -596,7 +594,7 @@ export function EmptyState({ onCreateFromScratch }: EmptyStateProps) {
 
                         <ExitGroup $out={showRun} $delay={110}>
                             <ComposerRow>
-                                <ComposerFrame $variant="hero" $state={state} $colors={ACCENT_FRAME}>
+                                <ComposerFrame $variant="hero" $state={state} $agentBuilder $colors={ACCENT_FRAME}>
                                     <Composer>
                                         <PromptInput
                                             ref={inputRef}
