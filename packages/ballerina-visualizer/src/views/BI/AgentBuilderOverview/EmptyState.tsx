@@ -104,7 +104,7 @@ const Intro = styled.div`
     flex-direction: column;
     align-items: center;
     gap: 8px;
-    margin-top: 24px;
+    margin-top: 8px;
 `;
 
 const auraBreathe = keyframes`
