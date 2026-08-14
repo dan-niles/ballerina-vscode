@@ -104,7 +104,7 @@ const Intro = styled.div`
     flex-direction: column;
     align-items: center;
     gap: 8px;
-    margin-top: 8px;
+    margin-top: 24px;
 `;
 
 const auraBreathe = keyframes`
@@ -222,14 +222,6 @@ const PromptEcho = styled.p`
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
-`;
-
-const CopilotName = styled.div`
-    margin-top: 20px;
-    color: var(--vscode-descriptionForeground);
-    font-size: 14px;
-    font-weight: 400;
-    text-align: center;
 `;
 
 const Heading = styled.h2`
@@ -575,104 +567,107 @@ export function EmptyState({ onCreateFromScratch }: EmptyStateProps) {
                     {showOpenCopilot && (
                         <ScratchLine>
                             <LinkButton type="button" onClick={openCopilot}>
-                                Open WSO2 Agent Builder Intelligence
+                                Open Copilot
                             </LinkButton>
                         </ScratchLine>
                     )}
-                </RunBlock>
-            )}
+                </RunBlock >
+            )
+            }
 
-            {idleMounted && (
-                <IdleBlock $out={showRun}>
-                    <div>
-                        <ExitGroup $out={showRun}>
-                            <CopilotName>WSO2 Agent Builder Intelligence</CopilotName>
-                            <Intro>
-                                <Heading>What should your agent do?</Heading>
-                            </Intro>
-                        </ExitGroup>
+            {
+                idleMounted && (
+                    <IdleBlock $out={showRun}>
+                        <div>
+                            <ExitGroup $out={showRun}>
+                                <CopilotName>WSO2 Agent Builder Intelligence</CopilotName>
+                                <Intro>
+                                    <Heading>What should your agent do?</Heading>
+                                </Intro>
+                            </ExitGroup>
 
-                        <ExitGroup $out={showRun} $delay={110}>
-                            <ComposerRow>
-                                <ComposerFrame $variant="hero" $state={state} $agentBuilder $colors={ACCENT_FRAME}>
-                                    <Composer>
-                                        <PromptInput
-                                            ref={inputRef}
-                                            rows={2}
-                                            value={text}
-                                            onChange={(event) => setText(event.target.value)}
-                                            onKeyDown={(event) => {
-                                                if (event.key === "Enter" && !event.shiftKey) {
-                                                    event.preventDefault();
-                                                    send(text);
-                                                }
-                                            }}
-                                            placeholder="Describe what you want your agent to do…"
-                                            aria-label="Describe the agent you want to build"
-                                        />
-                                        <ComposerFooter>
-                                            <RoundButton
-                                                type="button"
-                                                title="Open WSO2 Agent Builder Intelligence"
-                                                onClick={openCopilot}
-                                            >
-                                                <Codicon name="add" />
-                                            </RoundButton>
-                                            <RoundButton
-                                                type="button"
-                                                title="Send to WSO2 Agent Builder Intelligence"
-                                                aria-label="Send to WSO2 Agent Builder Intelligence"
-                                                disabled={!text.trim()}
-                                                onClick={() => send(text)}
-                                                primary={true}
-                                            >
-                                                <Codicon name="arrow-up" />
-                                            </RoundButton>
-                                        </ComposerFooter>
-                                    </Composer>
-                                </ComposerFrame>
-                            </ComposerRow>
-                        </ExitGroup>
-
-                        <ExitGroup $out={showRun}>
-                            <ExamplesBlock>
-                                <ExamplesLabel>Examples</ExamplesLabel>
-                                <Cards>
-                                    {EXAMPLES.map((example) => (
-                                        <Card
-                                            key={example.name}
-                                            type="button"
-                                            onClick={() => fillExample(example.prompt)}
-                                        >
-                                            <Icon
-                                                name={example.icon}
-                                                isCodicon={true}
-                                                sx={{ color: "var(--vscode-foreground)" }}
-                                                iconSx={{ fontSize: "18px", color: "var(--vscode-foreground)" }}
+                            <ExitGroup $out={showRun} $delay={110}>
+                                <ComposerRow>
+                                    <ComposerFrame $variant="hero" $state={state} $agentBuilder $colors={ACCENT_FRAME}>
+                                        <Composer>
+                                            <PromptInput
+                                                ref={inputRef}
+                                                rows={2}
+                                                value={text}
+                                                onChange={(event) => setText(event.target.value)}
+                                                onKeyDown={(event) => {
+                                                    if (event.key === "Enter" && !event.shiftKey) {
+                                                        event.preventDefault();
+                                                        send(text);
+                                                    }
+                                                }}
+                                                placeholder="Describe what you want your agent to do…"
+                                                aria-label="Describe the agent you want to build"
                                             />
-                                            <CardText>
-                                                <CardName>{example.name}</CardName>
-                                                <CardDescription>{example.description}</CardDescription>
-                                            </CardText>
-                                        </Card>
-                                    ))}
-                                </Cards>
-                            </ExamplesBlock>
+                                            <ComposerFooter>
+                                                <RoundButton
+                                                    type="button"
+                                                    title="Open WSO2 Agent Builder Intelligence"
+                                                    onClick={openCopilot}
+                                                >
+                                                    <Codicon name="add" />
+                                                </RoundButton>
+                                                <RoundButton
+                                                    type="button"
+                                                    title="Send to WSO2 Agent Builder Intelligence"
+                                                    aria-label="Send to WSO2 Agent Builder Intelligence"
+                                                    disabled={!text.trim()}
+                                                    onClick={() => send(text)}
+                                                    primary={true}
+                                                >
+                                                    <Codicon name="arrow-up" />
+                                                </RoundButton>
+                                            </ComposerFooter>
+                                        </Composer>
+                                    </ComposerFrame>
+                                </ComposerRow>
+                            </ExitGroup>
 
-                            <ManualRow>
-                                or
-                                <Button
-                                    appearance="secondary"
-                                    onClick={onCreateFromScratch}
-                                    buttonSx={MANUAL_BUTTON_SX}
-                                >
-                                    Add an agent manually
-                                </Button>
-                            </ManualRow>
-                        </ExitGroup>
-                    </div>
-                </IdleBlock>
-            )}
-        </Wrap>
+                            <ExitGroup $out={showRun}>
+                                <ExamplesBlock>
+                                    <ExamplesLabel>Examples</ExamplesLabel>
+                                    <Cards>
+                                        {EXAMPLES.map((example) => (
+                                            <Card
+                                                key={example.name}
+                                                type="button"
+                                                onClick={() => fillExample(example.prompt)}
+                                            >
+                                                <Icon
+                                                    name={example.icon}
+                                                    isCodicon={true}
+                                                    sx={{ color: "var(--vscode-foreground)" }}
+                                                    iconSx={{ fontSize: "18px", color: "var(--vscode-foreground)" }}
+                                                />
+                                                <CardText>
+                                                    <CardName>{example.name}</CardName>
+                                                    <CardDescription>{example.description}</CardDescription>
+                                                </CardText>
+                                            </Card>
+                                        ))}
+                                    </Cards>
+                                </ExamplesBlock>
+
+                                <ManualRow>
+                                    or
+                                    <Button
+                                        appearance="secondary"
+                                        onClick={onCreateFromScratch}
+                                        buttonSx={MANUAL_BUTTON_SX}
+                                    >
+                                        Add an agent manually
+                                    </Button>
+                                </ManualRow>
+                            </ExitGroup>
+                        </div>
+                    </IdleBlock>
+                )
+            }
+        </Wrap >
     );
 }
