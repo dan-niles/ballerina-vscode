@@ -224,6 +224,14 @@ const PromptEcho = styled.p`
     overflow: hidden;
 `;
 
+const CopilotName = styled.div`
+    margin-top: 20px;
+    color: var(--vscode-descriptionForeground);
+    font-size: 14px;
+    font-weight: 400;
+    text-align: center;
+`;
+
 const Heading = styled.h2`
     margin: 0;
     font-size: 28px;
