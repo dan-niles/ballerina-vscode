@@ -48,11 +48,8 @@ const INPUT_MIN_HEIGHT = 46;
 const INPUT_MAX_HEIGHT = 220;
 
 const EXIT_MS = 680;
-// The run may never start (panel closed, command failed); don't strand the page on "Building".
 const RUN_START_TIMEOUT_MS = 10000;
 
-// Each prompt names a real system so it wires a trigger or connector the user can see on the
-// canvas, and must stand alone if sent unedited — no possessives ("our docs") to resolve.
 const EXAMPLES = [
     {
         name: "Customer Support",
@@ -73,7 +70,7 @@ const EXAMPLES = [
         description: "Replies to incoming WhatsApp messages",
         icon: "device-mobile",
         prompt:
-            "Create a helpdesk agent that replies to incoming WhatsApp messages, answers common account and billing questions, and escalates anything it cannot resolve. Add a WhatsApp trigger for it.",
+            "Create a helpdesk agent that replies to incoming WhatsApp messages and answers common account and billing questions, telling the customer a human will follow up whenever it cannot answer confidently. Add a WhatsApp trigger for it.",
     },
     {
         name: "Sales Assistant",
