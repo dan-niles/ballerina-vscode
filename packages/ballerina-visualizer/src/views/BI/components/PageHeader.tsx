@@ -59,6 +59,7 @@ const ProjectTitle = styled.h1`
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    min-width: 0;
     @media (min-width: 768px) {
         font-size: 1.875rem;
     }

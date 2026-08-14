@@ -59,7 +59,7 @@ const EXAMPLES = [
         description: "Answers questions from your product docs",
         icon: "comment-discussion",
         prompt:
-            "Create a customer support agent that answers product questions from a knowledge base built from Markdown and PDF documentation files, and says so when the answer is not in the docs.",
+            "Create a customer support agent that answers product questions from a knowledge base built from Markdown documentation files, and says so when the answer is not in the docs.",
     },
     {
         name: "Issue Triager",
