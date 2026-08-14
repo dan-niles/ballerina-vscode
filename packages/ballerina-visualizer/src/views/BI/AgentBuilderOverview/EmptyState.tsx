@@ -572,7 +572,7 @@ export function EmptyState({ onCreateFromScratch }: EmptyStateProps) {
                     {showOpenCopilot && (
                         <ScratchLine>
                             <LinkButton type="button" onClick={openCopilot}>
-                                Open Copilot
+                                Open WSO2 Agent Builder Intelligence
                             </LinkButton>
                         </ScratchLine>
                     )}
