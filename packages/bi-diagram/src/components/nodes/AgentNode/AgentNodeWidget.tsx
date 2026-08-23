@@ -897,6 +897,9 @@ export function AgentNodeWidget(props: AgentNodeWidgetProps) {
 
     const hasUsageMenu = (usage: AgentUsage) => canTryTrigger(usage) || canDeleteTrigger(usage);
 
+    const deleteTriggerLabel = (usage: AgentUsage) =>
+        usage.trigger?.scope === "ENTRY_POINT" ? "Delete Endpoint" : "Delete Trigger";
+
     const tryTriggerLabel = (usage: AgentUsage) =>
         (usage.type?.split(":")[0] ?? usage.type) === "ai" ? "Chat" : "Try It";
 
@@ -1176,7 +1179,7 @@ export function AgentNodeWidget(props: AgentNodeWidgetProps) {
                                 key="delete-trigger"
                                 item={{
                                     id: "deleteTrigger",
-                                    label: "Delete Trigger",
+                                    label: deleteTriggerLabel(selectedUsage),
                                     onClick: () => onDeleteTrigger(selectedUsage),
                                 }}
                             />
