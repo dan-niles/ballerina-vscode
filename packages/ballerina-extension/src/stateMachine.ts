@@ -573,6 +573,7 @@ const stateMachine = createMachine<MachineContext>(
                 try {
                     // Register the event driven listener to get the artifact changes
                     context.langClient.registerPublishArtifacts();
+                    context.langClient.registerModuleCacheErrorHandler();
                     // IF the project info is not set, we don't need to build the project structure
                     if (context.projectInfo) {
 
