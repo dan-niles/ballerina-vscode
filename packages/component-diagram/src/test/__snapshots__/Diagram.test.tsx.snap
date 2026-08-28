@@ -27,6 +27,7 @@ exports[`Component Diagram - Snapshot Tests renders ai agent complex correctly: 
 .css-35 {padding: 4px;}
 .css-31 {display: flex; -webkit-flex-direction: row; -ms-flex-direction: row; flex-direction: row; -webkit-box-pack: center; -ms-flex-pack: center; -webkit-justify-content: center; justify-content: center; -webkit-align-items: center; -webkit-box-align: center; -ms-flex-align: center; align-items: center; color: var(--vscode-contrastBorder, var(--vscode-button-background)); height: 40px; width: 100%; cursor: pointer; font-family: "GilmerMedium"; font-size: 14px;}
 .css-31:hover {border: 1px solid var(--vscode-contrastActiveBorder, var(--vscode-button-background)); border-radius: 8px;}
+.css-32 {display: flex; -webkit-flex-direction: row; -ms-flex-direction: row; flex-direction: row; -webkit-box-pack: end; -ms-flex-pack: end; -webkit-justify-content: flex-end; justify-content: flex-end; -webkit-align-items: center; -webkit-box-align: center; -ms-flex-align: center; align-items: center; height: 64px; width: 248px; color: var(--vscode-foreground);}
 .css-19 {margin-bottom: -2px;}
 .css-18 {display: flex; height: fit-content; width: fit-content;}
 .css-12 svg {fill: var(--vscode-foreground);}
@@ -55,7 +56,6 @@ exports[`Component Diagram - Snapshot Tests renders ai agent complex correctly: 
 .css-15 {font-size: 14px; max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: "GilmerMedium"; color: var(--vscode-foreground); opacity: 1;}
 .css-13 {height: 16px; width: 14px; cursor: pointer;}
 .css-24 {display: flex; -webkit-flex-direction: column; -ms-flex-direction: column; flex-direction: column; -webkit-box-pack: center; -ms-flex-pack: center; -webkit-justify-content: center; justify-content: center; -webkit-align-items: flex-start; -webkit-box-align: flex-start; -ms-flex-align: flex-start; align-items: flex-start; gap: 6px; width: 100%; cursor: pointer;}
-.css-32 {display: flex; -webkit-flex-direction: row; -ms-flex-direction: row; flex-direction: row; -webkit-box-pack: end; -ms-flex-pack: end; -webkit-justify-content: flex-end; justify-content: flex-end; -webkit-align-items: center; -webkit-box-align: center; -ms-flex-align: center; align-items: center; height: 64px; width: 200px; color: var(--vscode-foreground);}
 .css-0 {display: flex; -webkit-flex-direction: column; -ms-flex-direction: column; flex-direction: column; -webkit-box-pack: center; -ms-flex-pack: center; -webkit-justify-content: center; justify-content: center; gap: 8px; position: absolute; left: 12px; bottom: 12px; z-index: 1000;}
 .css-10 {display: flex; -webkit-flex-direction: row; -ms-flex-direction: row; flex-direction: row; -webkit-box-pack: start; -ms-flex-pack: start; -webkit-justify-content: flex-start; justify-content: flex-start; -webkit-align-items: center; -webkit-box-align: center; -ms-flex-align: center; align-items: center; gap: 12px; width: 100%; cursor: pointer;}
 
@@ -649,7 +649,7 @@ exports[`Component Diagram - Snapshot Tests renders ai agent complex correctly: 
         </div>
         <div
           class="node css-7"
-          style="top: 332px; left: 250px;"
+          style="top: 332px; left: 202px;"
         >
           <div
             class="css-32"
@@ -728,7 +728,7 @@ exports[`Component Diagram - Snapshot Tests renders ai agent complex correctly: 
         </div>
         <div
           class="node css-7"
-          style="top: 100px; left: 250px;"
+          style="top: 100px; left: 202px;"
         >
           <div
             class="css-32"
@@ -857,6 +857,7 @@ exports[`Component Diagram - Snapshot Tests renders connections complex correctl
 .css-35 {padding: 4px;}
 .css-31 {display: flex; -webkit-flex-direction: row; -ms-flex-direction: row; flex-direction: row; -webkit-box-pack: center; -ms-flex-pack: center; -webkit-justify-content: center; justify-content: center; -webkit-align-items: center; -webkit-box-align: center; -ms-flex-align: center; align-items: center; color: var(--vscode-contrastBorder, var(--vscode-button-background)); height: 40px; width: 100%; cursor: pointer; font-family: "GilmerMedium"; font-size: 14px;}
 .css-31:hover {border: 1px solid var(--vscode-contrastActiveBorder, var(--vscode-button-background)); border-radius: 8px;}
+.css-32 {display: flex; -webkit-flex-direction: row; -ms-flex-direction: row; flex-direction: row; -webkit-box-pack: end; -ms-flex-pack: end; -webkit-justify-content: flex-end; justify-content: flex-end; -webkit-align-items: center; -webkit-box-align: center; -ms-flex-align: center; align-items: center; height: 64px; width: 248px; color: var(--vscode-foreground);}
 .css-19 {margin-bottom: -2px;}
 .css-18 {display: flex; height: fit-content; width: fit-content;}
 .css-12 svg {fill: var(--vscode-foreground);}
@@ -885,7 +886,6 @@ exports[`Component Diagram - Snapshot Tests renders connections complex correctl
 .css-15 {font-size: 14px; max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: "GilmerMedium"; color: var(--vscode-foreground); opacity: 1;}
 .css-13 {height: 16px; width: 14px; cursor: pointer;}
 .css-24 {display: flex; -webkit-flex-direction: column; -ms-flex-direction: column; flex-direction: column; -webkit-box-pack: center; -ms-flex-pack: center; -webkit-justify-content: center; justify-content: center; -webkit-align-items: flex-start; -webkit-box-align: flex-start; -ms-flex-align: flex-start; align-items: flex-start; gap: 6px; width: 100%; cursor: pointer;}
-.css-32 {display: flex; -webkit-flex-direction: row; -ms-flex-direction: row; flex-direction: row; -webkit-box-pack: end; -ms-flex-pack: end; -webkit-justify-content: flex-end; justify-content: flex-end; -webkit-align-items: center; -webkit-box-align: center; -ms-flex-align: center; align-items: center; height: 64px; width: 200px; color: var(--vscode-foreground);}
 .css-0 {display: flex; -webkit-flex-direction: column; -ms-flex-direction: column; flex-direction: column; -webkit-box-pack: center; -ms-flex-pack: center; -webkit-justify-content: center; justify-content: center; gap: 8px; position: absolute; left: 12px; bottom: 12px; z-index: 1000;}
 .css-10 {display: flex; -webkit-flex-direction: row; -ms-flex-direction: row; flex-direction: row; -webkit-box-pack: start; -ms-flex-pack: start; -webkit-justify-content: flex-start; justify-content: flex-start; -webkit-align-items: center; -webkit-box-align: center; -ms-flex-align: center; align-items: center; gap: 12px; width: 100%; cursor: pointer;}
 
@@ -1351,7 +1351,7 @@ exports[`Component Diagram - Snapshot Tests renders connections complex correctl
         </div>
         <div
           class="node css-7"
-          style="top: 100px; left: 250px;"
+          style="top: 100px; left: 202px;"
         >
           <div
             class="css-32"
@@ -1684,6 +1684,7 @@ exports[`Component Diagram - Snapshot Tests renders graphql complex correctly: g
 .css-36 {padding: 4px;}
 .css-32 {display: flex; -webkit-flex-direction: row; -ms-flex-direction: row; flex-direction: row; -webkit-box-pack: center; -ms-flex-pack: center; -webkit-justify-content: center; justify-content: center; -webkit-align-items: center; -webkit-box-align: center; -ms-flex-align: center; align-items: center; color: var(--vscode-contrastBorder, var(--vscode-button-background)); height: 40px; width: 100%; cursor: pointer; font-family: "GilmerMedium"; font-size: 14px;}
 .css-32:hover {border: 1px solid var(--vscode-contrastActiveBorder, var(--vscode-button-background)); border-radius: 8px;}
+.css-33 {display: flex; -webkit-flex-direction: row; -ms-flex-direction: row; flex-direction: row; -webkit-box-pack: end; -ms-flex-pack: end; -webkit-justify-content: flex-end; justify-content: flex-end; -webkit-align-items: center; -webkit-box-align: center; -ms-flex-align: center; align-items: center; height: 64px; width: 248px; color: var(--vscode-foreground);}
 .css-19 {margin-bottom: -2px;}
 .css-18 {display: flex; height: fit-content; width: fit-content;}
 .css-12 svg {fill: var(--vscode-foreground);}
@@ -1712,7 +1713,6 @@ exports[`Component Diagram - Snapshot Tests renders graphql complex correctly: g
 .css-15 {font-size: 14px; max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: "GilmerMedium"; color: var(--vscode-foreground); opacity: 1;}
 .css-13 {height: 16px; width: 14px; cursor: pointer;}
 .css-24 {display: flex; -webkit-flex-direction: column; -ms-flex-direction: column; flex-direction: column; -webkit-box-pack: center; -ms-flex-pack: center; -webkit-justify-content: center; justify-content: center; -webkit-align-items: flex-start; -webkit-box-align: flex-start; -ms-flex-align: flex-start; align-items: flex-start; gap: 6px; width: 100%; cursor: pointer;}
-.css-33 {display: flex; -webkit-flex-direction: row; -ms-flex-direction: row; flex-direction: row; -webkit-box-pack: end; -ms-flex-pack: end; -webkit-justify-content: flex-end; justify-content: flex-end; -webkit-align-items: center; -webkit-box-align: center; -ms-flex-align: center; align-items: center; height: 64px; width: 200px; color: var(--vscode-foreground);}
 .css-0 {display: flex; -webkit-flex-direction: column; -ms-flex-direction: column; flex-direction: column; -webkit-box-pack: center; -ms-flex-pack: center; -webkit-justify-content: center; justify-content: center; gap: 8px; position: absolute; left: 12px; bottom: 12px; z-index: 1000;}
 .css-10 {display: flex; -webkit-flex-direction: row; -ms-flex-direction: row; flex-direction: row; -webkit-box-pack: start; -ms-flex-pack: start; -webkit-justify-content: flex-start; justify-content: flex-start; -webkit-align-items: center; -webkit-box-align: center; -ms-flex-align: center; align-items: center; gap: 12px; width: 100%; cursor: pointer;}
 .css-27 {height: 16px; width: 14px; cursor: pointer; color: #e535ab;}
@@ -2431,7 +2431,7 @@ exports[`Component Diagram - Snapshot Tests renders graphql complex correctly: g
         </div>
         <div
           class="node css-7"
-          style="top: 100px; left: 250px;"
+          style="top: 100px; left: 202px;"
         >
           <div
             class="css-33"
@@ -2510,7 +2510,7 @@ exports[`Component Diagram - Snapshot Tests renders graphql complex correctly: g
         </div>
         <div
           class="node css-7"
-          style="top: 244px; left: 250px;"
+          style="top: 244px; left: 202px;"
         >
           <div
             class="css-33"
@@ -2589,7 +2589,7 @@ exports[`Component Diagram - Snapshot Tests renders graphql complex correctly: g
         </div>
         <div
           class="node css-7"
-          style="top: 340px; left: 250px;"
+          style="top: 340px; left: 202px;"
         >
           <div
             class="css-33"
@@ -2718,6 +2718,7 @@ exports[`Component Diagram - Snapshot Tests renders multiple connections complex
 .css-36 {padding: 4px;}
 .css-32 {display: flex; -webkit-flex-direction: row; -ms-flex-direction: row; flex-direction: row; -webkit-box-pack: center; -ms-flex-pack: center; -webkit-justify-content: center; justify-content: center; -webkit-align-items: center; -webkit-box-align: center; -ms-flex-align: center; align-items: center; color: var(--vscode-contrastBorder, var(--vscode-button-background)); height: 40px; width: 100%; cursor: pointer; font-family: "GilmerMedium"; font-size: 14px;}
 .css-32:hover {border: 1px solid var(--vscode-contrastActiveBorder, var(--vscode-button-background)); border-radius: 8px;}
+.css-33 {display: flex; -webkit-flex-direction: row; -ms-flex-direction: row; flex-direction: row; -webkit-box-pack: end; -ms-flex-pack: end; -webkit-justify-content: flex-end; justify-content: flex-end; -webkit-align-items: center; -webkit-box-align: center; -ms-flex-align: center; align-items: center; height: 64px; width: 248px; color: var(--vscode-foreground);}
 .css-19 {margin-bottom: -2px;}
 .css-18 {display: flex; height: fit-content; width: fit-content;}
 .css-12 svg {fill: var(--vscode-foreground);}
@@ -2746,7 +2747,6 @@ exports[`Component Diagram - Snapshot Tests renders multiple connections complex
 .css-15 {font-size: 14px; max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: "GilmerMedium"; color: var(--vscode-foreground); opacity: 1;}
 .css-13 {height: 16px; width: 14px; cursor: pointer;}
 .css-24 {display: flex; -webkit-flex-direction: column; -ms-flex-direction: column; flex-direction: column; -webkit-box-pack: center; -ms-flex-pack: center; -webkit-justify-content: center; justify-content: center; -webkit-align-items: flex-start; -webkit-box-align: flex-start; -ms-flex-align: flex-start; align-items: flex-start; gap: 6px; width: 100%; cursor: pointer;}
-.css-33 {display: flex; -webkit-flex-direction: row; -ms-flex-direction: row; flex-direction: row; -webkit-box-pack: end; -ms-flex-pack: end; -webkit-justify-content: flex-end; justify-content: flex-end; -webkit-align-items: center; -webkit-box-align: center; -ms-flex-align: center; align-items: center; height: 64px; width: 200px; color: var(--vscode-foreground);}
 .css-0 {display: flex; -webkit-flex-direction: column; -ms-flex-direction: column; flex-direction: column; -webkit-box-pack: center; -ms-flex-pack: center; -webkit-justify-content: center; justify-content: center; gap: 8px; position: absolute; left: 12px; bottom: 12px; z-index: 1000;}
 .css-10 {display: flex; -webkit-flex-direction: row; -ms-flex-direction: row; flex-direction: row; -webkit-box-pack: start; -ms-flex-pack: start; -webkit-justify-content: flex-start; justify-content: flex-start; -webkit-align-items: center; -webkit-box-align: center; -ms-flex-align: center; align-items: center; gap: 12px; width: 100%; cursor: pointer;}
 .css-27 {height: 16px; width: 14px; cursor: pointer; color: #e535ab;}
@@ -3465,7 +3465,7 @@ exports[`Component Diagram - Snapshot Tests renders multiple connections complex
         </div>
         <div
           class="node css-7"
-          style="top: 100px; left: 250px;"
+          style="top: 100px; left: 202px;"
         >
           <div
             class="css-33"
@@ -3544,7 +3544,7 @@ exports[`Component Diagram - Snapshot Tests renders multiple connections complex
         </div>
         <div
           class="node css-7"
-          style="top: 244px; left: 250px;"
+          style="top: 244px; left: 202px;"
         >
           <div
             class="css-33"
@@ -3623,7 +3623,7 @@ exports[`Component Diagram - Snapshot Tests renders multiple connections complex
         </div>
         <div
           class="node css-7"
-          style="top: 340px; left: 250px;"
+          style="top: 340px; left: 202px;"
         >
           <div
             class="css-33"
@@ -3750,6 +3750,7 @@ exports[`Component Diagram - Snapshot Tests renders multiple services correctly:
 .css-28 {padding: 4px;}
 .css-23 {display: flex; -webkit-flex-direction: row; -ms-flex-direction: row; flex-direction: row; -webkit-box-pack: center; -ms-flex-pack: center; -webkit-justify-content: center; justify-content: center; -webkit-align-items: center; -webkit-box-align: center; -ms-flex-align: center; align-items: center; color: var(--vscode-contrastBorder, var(--vscode-button-background)); height: 40px; width: 100%; cursor: pointer; font-family: "GilmerMedium"; font-size: 14px;}
 .css-23:hover {border: 1px solid var(--vscode-contrastActiveBorder, var(--vscode-button-background)); border-radius: 8px;}
+.css-25 {display: flex; -webkit-flex-direction: row; -ms-flex-direction: row; flex-direction: row; -webkit-box-pack: end; -ms-flex-pack: end; -webkit-justify-content: flex-end; justify-content: flex-end; -webkit-align-items: center; -webkit-box-align: center; -ms-flex-align: center; align-items: center; height: 64px; width: 248px; color: var(--vscode-foreground);}
 .css-24 {margin-bottom: -2px;}
 .css-18 {display: flex; height: fit-content; width: fit-content;}
 .css-20 {font-size: 12px; text-transform: uppercase; font-family: "GilmerBold"; background-color: #3d7eff; color: #FFF; padding: 4px 8px; border-radius: 4px; -webkit-box-pack: center; -ms-flex-pack: center; -webkit-justify-content: center; justify-content: center; min-width: 60px; text-align: center; -webkit-align-items: center; -webkit-box-align: center; -ms-flex-align: center; align-items: center; font-weight: bold;}
@@ -3774,7 +3775,6 @@ exports[`Component Diagram - Snapshot Tests renders multiple services correctly:
 .css-7 {position: absolute; -webkit-touch-callout: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; cursor: move; pointer-events: all;}
 .css-13 {height: 16px; width: 14px; cursor: pointer;}
 .css-14 {display: flex; -webkit-flex-direction: column; -ms-flex-direction: column; flex-direction: column; -webkit-box-pack: center; -ms-flex-pack: center; -webkit-justify-content: center; justify-content: center; -webkit-align-items: flex-start; -webkit-box-align: flex-start; -ms-flex-align: flex-start; align-items: flex-start; gap: 6px; width: 100%; cursor: pointer;}
-.css-25 {display: flex; -webkit-flex-direction: row; -ms-flex-direction: row; flex-direction: row; -webkit-box-pack: end; -ms-flex-pack: end; -webkit-justify-content: flex-end; justify-content: flex-end; -webkit-align-items: center; -webkit-box-align: center; -ms-flex-align: center; align-items: center; height: 64px; width: 200px; color: var(--vscode-foreground);}
 .css-0 {display: flex; -webkit-flex-direction: column; -ms-flex-direction: column; flex-direction: column; -webkit-box-pack: center; -ms-flex-pack: center; -webkit-justify-content: center; justify-content: center; gap: 8px; position: absolute; left: 12px; bottom: 12px; z-index: 1000;}
 
 /* DOM */
@@ -4034,7 +4034,7 @@ exports[`Component Diagram - Snapshot Tests renders multiple services correctly:
         </div>
         <div
           class="node css-7"
-          style="top: 100px; left: 250px;"
+          style="top: 100px; left: 202px;"
         >
           <div
             class="css-25"
@@ -4362,6 +4362,7 @@ exports[`Component Diagram - Snapshot Tests renders simple service correctly: si
 .css-3>*:not(:last-child) {border-bottom: 1px solid var(--vscode-dropdown-border);}
 .css-26 svg {fill: var(--vscode-foreground);}
 .css-26 {padding: 4px;}
+.css-23 {display: flex; -webkit-flex-direction: row; -ms-flex-direction: row; flex-direction: row; -webkit-box-pack: end; -ms-flex-pack: end; -webkit-justify-content: flex-end; justify-content: flex-end; -webkit-align-items: center; -webkit-box-align: center; -ms-flex-align: center; align-items: center; height: 64px; width: 248px; color: var(--vscode-foreground);}
 .css-22 {margin-bottom: -2px;}
 .css-18 {display: flex; height: fit-content; width: fit-content;}
 .css-20 {font-size: 12px; text-transform: uppercase; font-family: "GilmerBold"; background-color: #3d7eff; color: #FFF; padding: 4px 8px; border-radius: 4px; -webkit-box-pack: center; -ms-flex-pack: center; -webkit-justify-content: center; justify-content: center; min-width: 60px; text-align: center; -webkit-align-items: center; -webkit-box-align: center; -ms-flex-align: center; align-items: center; font-weight: bold;}
@@ -4386,7 +4387,6 @@ exports[`Component Diagram - Snapshot Tests renders simple service correctly: si
 .css-7 {position: absolute; -webkit-touch-callout: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; cursor: move; pointer-events: all;}
 .css-13 {height: 16px; width: 14px; cursor: pointer;}
 .css-14 {display: flex; -webkit-flex-direction: column; -ms-flex-direction: column; flex-direction: column; -webkit-box-pack: center; -ms-flex-pack: center; -webkit-justify-content: center; justify-content: center; -webkit-align-items: flex-start; -webkit-box-align: flex-start; -ms-flex-align: flex-start; align-items: flex-start; gap: 6px; width: 100%; cursor: pointer;}
-.css-23 {display: flex; -webkit-flex-direction: row; -ms-flex-direction: row; flex-direction: row; -webkit-box-pack: end; -ms-flex-pack: end; -webkit-justify-content: flex-end; justify-content: flex-end; -webkit-align-items: center; -webkit-box-align: center; -ms-flex-align: center; align-items: center; height: 64px; width: 200px; color: var(--vscode-foreground);}
 .css-0 {display: flex; -webkit-flex-direction: column; -ms-flex-direction: column; flex-direction: column; -webkit-box-pack: center; -ms-flex-pack: center; -webkit-justify-content: center; justify-content: center; gap: 8px; position: absolute; left: 12px; bottom: 12px; z-index: 1000;}
 
 /* DOM */
@@ -4633,7 +4633,7 @@ exports[`Component Diagram - Snapshot Tests renders simple service correctly: si
         </div>
         <div
           class="node css-7"
-          style="top: 100px; left: 250px;"
+          style="top: 100px; left: 202px;"
         >
           <div
             class="css-23"

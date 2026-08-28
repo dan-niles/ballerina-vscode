@@ -35,7 +35,12 @@ export const ENTRY_NODE_WIDTH = 240;
 export const ENTRY_NODE_HEIGHT = 64;
 export const CON_NODE_WIDTH = ENTRY_NODE_WIDTH - 40;
 export const CON_NODE_HEIGHT = ENTRY_NODE_HEIGHT;
-export const LISTENER_NODE_WIDTH = CON_NODE_WIDTH;
+// The widget paints a label column, a menu and the circle in one row; the box has to hold all three.
+export const LISTENER_MENU_WIDTH = 24;
+export const LISTENER_ROW_GAP = 12;
+export const LISTENER_LABEL_WIDTH = 136;
+export const LISTENER_NODE_WIDTH =
+    LISTENER_LABEL_WIDTH + LISTENER_ROW_GAP + LISTENER_MENU_WIDTH + LISTENER_ROW_GAP + CON_NODE_HEIGHT;
 export const LISTENER_NODE_HEIGHT = CON_NODE_HEIGHT;
 
 export const NODE_BORDER_WIDTH = 1.5;

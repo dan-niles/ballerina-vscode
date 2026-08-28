@@ -22,6 +22,7 @@ import { DiagramEngine, PortWidget } from "@projectstorm/react-diagrams-core";
 import { ListenerNodeModel } from "./ListenerNodeModel";
 import {
     NODE_BORDER_WIDTH,
+    LISTENER_LABEL_WIDTH,
     LISTENER_NODE_WIDTH,
     AUTOMATION_LISTENER,
     LISTENER_NODE_HEIGHT,
@@ -129,7 +130,7 @@ const MenuButton = styled(Button)`
 `;
 
 const Title = styled(StyledText) <NodeStyleProp>`
-    max-width: ${LISTENER_NODE_WIDTH - LISTENER_NODE_HEIGHT}px;
+    max-width: ${LISTENER_LABEL_WIDTH}px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -140,7 +141,7 @@ const Title = styled(StyledText) <NodeStyleProp>`
 
 const Description = styled(StyledText)`
     font-size: 12px;
-    max-width: ${LISTENER_NODE_WIDTH - LISTENER_NODE_HEIGHT}px;
+    max-width: ${LISTENER_LABEL_WIDTH}px;
     overflow: hidden;
     text-overflow: ellipsis;
     font-family: monospace;

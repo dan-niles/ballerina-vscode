@@ -27,7 +27,6 @@ import {
     createNodesLink,
     createPortNodeLink,
     createPortsLink,
-    fitDiagram,
     generateEngine,
     sortItems,
 } from "../utils/diagram";
@@ -134,7 +133,10 @@ export function Diagram(props: DiagramProps) {
 
     useEffect(() => {
         const handleResize = () => {
-            fitDiagram(diagramEngine);
+            if (diagramEngine?.getCanvas()?.getBoundingClientRect) {
+                diagramEngine.zoomToFitNodes({ margin: 40, maxZoom: 1 });
+                diagramEngine.repaintCanvas();
+            }
         };
 
         window.addEventListener("resize", handleResize);
@@ -463,7 +465,9 @@ export function Diagram(props: DiagramProps) {
             if (overlayLayer) {
                 diagramEngine.getModel().removeLayer(overlayLayer);
             }
-            fitDiagram(diagramEngine);
+            if (diagramEngine?.getCanvas()?.getBoundingClientRect) {
+                diagramEngine.zoomToFitNodes({ margin: 40, maxZoom: 1 });
+            }
             diagramEngine.repaintCanvas();
         }, 200);
     };
