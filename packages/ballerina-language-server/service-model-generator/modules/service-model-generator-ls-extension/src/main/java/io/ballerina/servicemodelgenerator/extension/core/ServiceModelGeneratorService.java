@@ -48,6 +48,7 @@ import io.ballerina.projects.Project;
 import io.ballerina.servicemodelgenerator.extension.builder.FunctionBuilderRouter;
 import io.ballerina.servicemodelgenerator.extension.builder.ServiceBuilderRouter;
 import io.ballerina.servicemodelgenerator.extension.builder.service.agent.AgentTriggerChannels;
+import io.ballerina.servicemodelgenerator.extension.connector.PlatformDependencyEditUtil;
 import io.ballerina.servicemodelgenerator.extension.connector.TriggerModelReader;
 import io.ballerina.servicemodelgenerator.extension.model.Codedata;
 import io.ballerina.servicemodelgenerator.extension.model.Function;
@@ -129,6 +130,7 @@ import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -250,7 +252,7 @@ public class ServiceModelGeneratorService implements ExtendedLanguageServerServi
             try {
                 Path filePath = Path.of(request.filePath());
 
-                this.workspaceManager.loadProject(filePath);
+                Project project = this.workspaceManager.loadProject(filePath);
                 Optional<SemanticModel> semanticModel = this.workspaceManager.semanticModel(filePath);
                 Optional<Document> documentOpt = this.workspaceManager.document(filePath);
 
@@ -271,6 +273,9 @@ public class ServiceModelGeneratorService implements ExtendedLanguageServerServi
                                 FTPListenerUtil.adjustFtpListenerModelForDeprecatedMode(
                                         listenerModel, request.removeDeprecated(), semanticModel.get(), document);
                             }
+                            PlatformDependencyEditUtil.overlayDriverDependencies(listenerModel,
+                                    request.codedata().getOrgName(), request.codedata().getModuleName(),
+                                    request.codedata().getVersion(), project);
                             return new ListenerModelResponse(listenerModel);
                         })
                         .orElseGet(ListenerModelResponse::new);
@@ -291,7 +296,7 @@ public class ServiceModelGeneratorService implements ExtendedLanguageServerServi
         return CompletableFuture.supplyAsync(() -> {
             try {
                 Path filePath = Path.of(request.filePath());
-                this.workspaceManager.loadProject(filePath);
+                Project project = this.workspaceManager.loadProject(filePath);
 
                 Optional<Document> document = this.workspaceManager.document(filePath);
                 if (document.isEmpty()) {
@@ -309,7 +314,13 @@ public class ServiceModelGeneratorService implements ExtendedLanguageServerServi
                 }
                 String listenerDeclaration = listener.getListenerDeclaration();
                 edits.add(new TextEdit(Utils.toRange(lineRange.endLine()), NEW_LINE + listenerDeclaration));
-                return new CommonSourceResponse(Map.of(request.filePath(), edits));
+
+                Map<String, List<TextEdit>> allEdits = new LinkedHashMap<>();
+                allEdits.put(request.filePath(), edits);
+                PlatformDependencyEditUtil.addDriverDependenciesIfPresent(allEdits, project,
+                        listener.getProperties());
+
+                return new CommonSourceResponse(allEdits);
             } catch (Throwable e) {
                 return new CommonSourceResponse(e);
             }
@@ -809,7 +820,7 @@ public class ServiceModelGeneratorService implements ExtendedLanguageServerServi
                 Path filePath = Path.of(request.filePath());
                 Listener listener = request.listener();
 
-                this.workspaceManager.loadProject(filePath);
+                Project project = this.workspaceManager.loadProject(filePath);
                 Optional<Document> document = this.workspaceManager.document(filePath);
                 if (document.isEmpty()) {
                     return new CommonSourceResponse();
@@ -853,7 +864,12 @@ public class ServiceModelGeneratorService implements ExtendedLanguageServerServi
                 // Add imports required by the FTP coordination config type cast
                 FTPListenerUtil.addCoordinationConfigImports(listenerDeclaration, modulePartNode, edits);
 
-                return new CommonSourceResponse(Map.of(request.filePath(), edits));
+                Map<String, List<TextEdit>> allEdits = new LinkedHashMap<>();
+                allEdits.put(request.filePath(), edits);
+                PlatformDependencyEditUtil.addDriverDependenciesIfPresent(allEdits, project,
+                        listener.getProperties());
+
+                return new CommonSourceResponse(allEdits);
             } catch (Throwable e) {
                 return new CommonSourceResponse(e);
             }
