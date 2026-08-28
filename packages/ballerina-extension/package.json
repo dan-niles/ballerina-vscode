@@ -1273,24 +1273,17 @@
         ],
         "icons": {
             "bi-ai-agent": {
-                "description": "ai-agent",
+                "description": "bi-ai-agent",
                 "default": {
                     "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
                     "fontCharacter": "\\f112"
                 }
             },
             "bi-ai-chat": {
-                "description": "ai-chat",
+                "description": "bi-ai-chat",
                 "default": {
                     "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
                     "fontCharacter": "\\f113"
-                }
-            },
-            "ballerina-new-module": {
-                "description": "new-module",
-                "default": {
-                    "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
-                    "fontCharacter": "\\f135"
                 }
             },
             "ballerina-refresh": {
@@ -1314,95 +1307,67 @@
                     "fontCharacter": "\\ea80"
                 }
             },
-            "ballerina-delete": {
-                "description": "delete",
-                "default": {
-                    "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
-                    "fontCharacter": "\\f114"
-                }
-            },
-            "ballerina-agent-view": {
-                "description": "agent-view",
-                "default": {
-                    "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
-                    "fontCharacter": "\\f175"
-                }
-            },
             "ballerina-start": {
                 "description": "start",
                 "default": {
                     "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
-                    "fontCharacter": "\\f24a"
+                    "fontCharacter": "\\f259"
                 }
             },
             "ballerina-debug": {
                 "description": "debug",
                 "default": {
                     "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
-                    "fontCharacter": "\\f1c1"
-                }
-            },
-            "ballerina-source-view": {
-                "description": "source-view",
-                "default": {
-                    "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
-                    "fontCharacter": "\\f149"
+                    "fontCharacter": "\\f1cf"
                 }
             },
             "ballerina-persist-diagram": {
                 "description": "persist-diagram",
                 "default": {
                     "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
-                    "fontCharacter": "\\f220"
-                }
-            },
-            "ballerina-cached-rounded": {
-                "description": "cached-rounded",
-                "default": {
-                    "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
-                    "fontCharacter": "\\f106"
+                    "fontCharacter": "\\f22f"
                 }
             },
             "ballerina-cached-round": {
                 "description": "cached-round",
                 "default": {
                     "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
-                    "fontCharacter": "\\f107"
+                    "fontCharacter": "\\f1ad"
                 }
             },
             "ballerina-fit-to-screen": {
                 "description": "fit-to-screen",
                 "default": {
                     "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
-                    "fontCharacter": "\\f120"
+                    "fontCharacter": "\\f1f1"
                 }
             },
             "ballerina-explicit-outlined": {
                 "description": "explicit-outlined",
                 "default": {
                     "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
-                    "fontCharacter": "\\f11f"
+                    "fontCharacter": "\\f1e9"
                 }
             },
             "ballerina-error-icon": {
                 "description": "error-icon",
                 "default": {
                     "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
-                    "fontCharacter": "\\f11c"
+                    "fontCharacter": "\\f1e3"
                 }
             },
             "ballerina-error-outline": {
                 "description": "error-outline",
                 "default": {
                     "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
-                    "fontCharacter": "\\f11d"
+                    "fontCharacter": "\\f1e5"
                 }
             },
             "ballerina-symbol-struct-icon": {
                 "description": "symbol-struct-icon",
                 "default": {
                     "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
-                    "fontCharacter": "\\f13d"
+                    "fontCharacter": "\\f25d"
                 }
             },
             "ballerina-add-circle-outline": {
@@ -1416,21 +1381,21 @@
                 "description": "radio-button-checked",
                 "default": {
                     "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
-                    "fontCharacter": "\\f134"
+                    "fontCharacter": "\\f23e"
                 }
             },
             "ballerina-radio-button-unchecked": {
                 "description": "radio-button-unchecked",
                 "default": {
                     "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
-                    "fontCharacter": "\\f135"
+                    "fontCharacter": "\\f23f"
                 }
             },
             "ballerina-file-upload": {
                 "description": "file-upload",
                 "default": {
                     "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
-                    "fontCharacter": "\\f11f"
+                    "fontCharacter": "\\f1ee"
                 }
             },
             "ballerina-file-submodule": {
@@ -1441,7 +1406,7 @@
                 }
             },
             "ballerina-switch-project": {
-                "description": "switch-project",
+                "description": "sync",
                 "default": {
                     "fontPath": "./resources/codicons/codicon.ttf",
                     "fontCharacter": "\\ea77"
@@ -1451,7 +1416,7 @@
                 "description": "design-view",
                 "default": {
                     "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
-                    "fontCharacter": "\\f1c6"
+                    "fontCharacter": "\\f1d4"
                 }
             },
             "distro-file-submodule": {
@@ -1529,13 +1494,14 @@
         "package": "node ../../submodules/wso2-vscode-extensions/workspaces/common-libs/scripts/package-vsix.js",
         "clearVsix": "del-cli \"./ballerina-[0-9]*.vsix\" \"./vsix/ballerina-[0-9]*.vsix\"",
         "copyFonts": "copyfiles -f ./node_modules/@wso2/font-wso2-vscode/dist/* ./resources/font-wso2-vscode/dist/",
+        "syncIcons": "node ./scripts/sync-icons.js",
         "copyVSIX": "copyfiles *.vsix ./vsix",
         "copyVSIXToRoot": "copyfiles -f ./vsix/*.vsix ../../..",
         "copyLS": "del-cli ./ls && node -e \"const fs=require('fs'),path=require('path'),version=require('./package.json').version,source=path.join('..','ballerina-language-server','build','ballerina-language-server-'+version+'.jar'),destination=path.join('ls',path.basename(source));fs.mkdirSync('ls',{recursive:true});fs.copyFileSync(source,destination);console.log('Copied '+source+' -> '+destination)\"",
         "copyGrammar": "copyfiles -f ../ballerina-grammar/syntaxes/ballerina.tmLanguage ./syntaxes/",
         "build": "pnpm run compile && pnpm run lint && pnpm run postbuild",
         "rebuild": "pnpm run clean && pnpm run compile && pnpm run postbuild",
-        "postbuild": "pnpm run copyLS && pnpm run copyFonts && pnpm run copyJSLibs && pnpm run clearVsix && pnpm run package && pnpm run copyVSIX",
+        "postbuild": "pnpm run copyLS && pnpm run copyFonts && pnpm run syncIcons && pnpm run copyJSLibs && pnpm run clearVsix && pnpm run package && pnpm run copyVSIX",
         "copyJSLibs": "copyfiles -f ../ballerina-visualizer/build/*.js resources/jslibs && copyfiles -f ../ballerina-visualizer/build/images/* resources/jslibs/images && copyfiles -f ../trace-visualizer/build/*.js resources/jslibs && copyfiles -f ../graphql/build/*.js resources/jslibs && pnpm run copyFederation",
         "copyFederation": "node ./scripts/copy-federation.js",
         "test:typecheck": "tsc --noEmit -p tsconfig.spec.json"
