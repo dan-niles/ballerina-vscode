@@ -890,12 +890,15 @@ export function AgentNodeWidget(props: AgentNodeWidgetProps) {
     };
 
     const canDeleteTrigger = (usage: AgentUsage) =>
-        !readOnly && Boolean(usage.trigger) && Boolean(agentNode?.onDeleteTrigger);
+        Boolean(usage.trigger) && Boolean(agentNode?.onDeleteTrigger);
 
     const canTryTrigger = (usage: AgentUsage) =>
-        !readOnly && Boolean(usage.tryIt) && Boolean(agentNode?.onTryTrigger);
+        Boolean(usage.tryIt) && Boolean(agentNode?.onTryTrigger);
 
     const hasUsageMenu = (usage: AgentUsage) => canTryTrigger(usage) || canDeleteTrigger(usage);
+
+    const deleteTriggerLabel = (usage: AgentUsage) =>
+        usage.trigger?.scope === "ENTRY_POINT" ? "Delete Endpoint" : "Delete Trigger";
 
     const tryTriggerLabel = (usage: AgentUsage) =>
         (usage.type?.split(":")[0] ?? usage.type) === "ai" ? "Chat" : "Try It";
@@ -917,7 +920,7 @@ export function AgentNodeWidget(props: AgentNodeWidgetProps) {
         hasUsageMenu(usage) ? usageMenuX(usage) : Math.max(0, USAGE_TEXT_RIGHT_X - usageTextWidth(usage));
 
     const agentUsageOptions = { canAddTrigger: Boolean(agentNode?.onAddTrigger) };
-    const showsAddTile = !readOnly && showsAddTriggerTile(agentWidgetType, agentUsageOptions);
+    const showsAddTile = showsAddTriggerTile(agentWidgetType, agentUsageOptions);
     const addTileRow = usages.length + (hiddenUsageCount > 0 ? 1 : 0);
     const addTileY = addTileRow * AGENT_USAGE_ROW_PITCH
         - (addTileRow > 0 ? AGENT_NODE_USAGE_GAP - AGENT_NODE_TOOL_GAP : 0);
@@ -1176,7 +1179,7 @@ export function AgentNodeWidget(props: AgentNodeWidgetProps) {
                                 key="delete-trigger"
                                 item={{
                                     id: "deleteTrigger",
-                                    label: selectedUsage.trigger?.entryPoint ? "Delete Endpoint" : "Delete Trigger",
+                                    label: deleteTriggerLabel(selectedUsage),
                                     onClick: () => onDeleteTrigger(selectedUsage),
                                 }}
                             />
