@@ -253,7 +253,9 @@ export function AgentBuilderOverview({ projectPath, agentFocus }: AgentBuilderOv
         showsAgentCanvas,
         showsDesignCanvas
     );
-    const navActions = canToggle ? <ViewToggle view={view} onChange={setView} /> : undefined;
+    // Toggle hidden pending team review; the view selection below is unchanged.
+    // const navActions = canToggle ? <ViewToggle view={view} onChange={setView} /> : undefined;
+    const navActions: React.ReactNode = undefined;
 
     const integrationTitle = projectStructure?.projectTitle || projectStructure?.projectName;
     const deployableIntegrationTypes = useMemo(() => getIntegrationTypes(projectStructure), [projectStructure]);
