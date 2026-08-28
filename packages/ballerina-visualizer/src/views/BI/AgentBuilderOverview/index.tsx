@@ -21,7 +21,6 @@ import styled from "@emotion/styled";
 import {
     BI_COMMANDS,
     BuildMode,
-    DIRECTORY_MAP,
     EVENT_TYPE,
     FOCUS_FLOW_DIAGRAM_VIEW,
     MACHINE_VIEW,
@@ -35,14 +34,20 @@ import { TopNavigationBar } from "../../../components/TopNavigationBar";
 import { usePlatformExtContext } from "../../../providers/platform-ext-ctx-provider";
 import { getIntegrationTypes, validateComponentName, useProjectContentRefresh } from "../PackageOverview/utils";
 import { useTracingStatus } from "../../../hooks/useProductMode";
-import { AgentTabs, agentKey } from "./AgentTabs";
+import { AgentTabs, Strip, StripAction, agentKey } from "./AgentTabs";
 import { EmptyState } from "./EmptyState";
+import { AgentFocusRequest, useOverviewSelection } from "./useOverviewSelection";
+import { ViewToggle } from "./ViewToggle";
+import { useCanvasReveal } from "./useCanvasReveal";
+
+export type { AgentFocusRequest };
 
 const LazyFocusFlowDiagram = React.lazy(() =>
     import("../FocusFlowDiagram").then((m) => ({ default: m.BIFocusFlowDiagram }))
 );
 const LazyAddAgentPopup = React.lazy(() => import("../AIChatAgent/AddAgentPopup"));
 const LazyAddLibraryArtifactPopup = React.lazy(() => import("./AddLibraryArtifactPopup"));
+const LazyComponentDiagram = React.lazy(() => import("../ComponentDiagram"));
 
 const Page = styled.div`
     display: flex;
@@ -71,11 +76,6 @@ const Panel = styled.div<{ bordered?: boolean }>`
     transition: border-color 500ms ease;
 `;
 
-const CROSSFADE_MS = 520;
-// onReady fires when the model lands; the diagram still has a layout/fit pass to run.
-const READY_SETTLE_MS = 180;
-const READY_FALLBACK_MS = 2500;
-
 const Stage = styled.div`
     display: grid;
     flex: 1;
@@ -97,6 +97,21 @@ const Layer = styled.div<{ $show?: boolean }>`
     @media (prefers-reduced-motion: reduce) {
         transition: none;
     }
+`;
+
+const DesignBar = styled(Strip)`
+    align-items: center;
+`;
+
+const DesignTitle = styled.div`
+    display: flex;
+    flex: 1;
+    align-items: center;
+    min-width: 0;
+    padding: 0 20px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--vscode-foreground);
 `;
 
 const CanvasSlot = styled.div`
@@ -163,10 +178,23 @@ function menuLabel(icon: string, text: string) {
     );
 }
 
-export interface AgentFocusRequest {
-    path: string;
-    startLine: number;
-    requestId: number;
+function CanvasLayer({ show, bar, children }: { show: boolean; bar?: React.ReactNode; children: React.ReactNode }) {
+    return (
+        <Layer $show={show}>
+            {bar}
+            <CanvasSlot>
+                <React.Suspense
+                    fallback={
+                        <CenteredSlot>
+                            <ProgressRing color={ThemeColors.PRIMARY} />
+                        </CenteredSlot>
+                    }
+                >
+                    {children}
+                </React.Suspense>
+            </CanvasSlot>
+        </Layer>
+    );
 }
 
 interface AgentBuilderOverviewProps {
@@ -179,18 +207,11 @@ export function AgentBuilderOverview({ projectPath, agentFocus }: AgentBuilderOv
     const { platformExtState } = usePlatformExtContext();
     const [projectStructure, setProjectStructure] = useState<ProjectStructure>();
     const [isInProject, setIsInProject] = useState(false);
-    const [selectedKey, setSelectedKey] = useState<string>();
     const [showAddAgent, setShowAddAgent] = useState(false);
     const [showAddLibraryArtifact, setShowAddLibraryArtifact] = useState(false);
     const [deployAnchor, setDeployAnchor] = useState<HTMLElement | null>(null);
-    const [canvasReady, setCanvasReady] = useState(false);
-    // Only true once the empty state has actually been on screen, so opening a
-    // project that already has an agent never flashes it.
-    const [emptyMounted, setEmptyMounted] = useState(false);
     const compactHeader = useCompactHeader();
     const { isTracingEnabled, toggleTracing } = useTracingStatus(rpcClient, projectPath);
-    const revealTimerRef = useRef<ReturnType<typeof setTimeout>>();
-    const sawEmptyRef = useRef(false);
 
     const fetchContext = useCallback(() => {
         rpcClient
@@ -211,71 +232,28 @@ export function AgentBuilderOverview({ projectPath, agentFocus }: AgentBuilderOv
 
     useProjectContentRefresh(rpcClient, fetchContext);
 
-    const agents = useMemo(
-        () => projectStructure?.directoryMap?.[DIRECTORY_MAP.AGENT] ?? [],
-        [projectStructure]
-    );
-
     const isLibrary = projectStructure?.isLibrary ?? false;
 
-    const selectedAgent = useMemo(
-        () => agents.find((agent) => agentKey(agent) === selectedKey) ?? agents[0],
-        [agents, selectedKey]
+    const closeAddAgent = useCallback(() => setShowAddAgent(false), []);
+    const {
+        agents,
+        selectedAgent,
+        showsAgentCanvas,
+        showsDesignCanvas,
+        packageIsEmpty,
+        canToggle,
+        view,
+        setView,
+        selectAgent,
+    } = useOverviewSelection(projectStructure, agentFocus, closeAddAgent);
+
+    const { showAgent, showDesign, showEmpty, emptyMounted, designMounted, onAgentReady } = useCanvasReveal(
+        projectStructure,
+        packageIsEmpty,
+        showsAgentCanvas,
+        showsDesignCanvas
     );
-
-    const appliedFocusRef = useRef<number>();
-
-    useEffect(() => {
-        if (!agentFocus || appliedFocusRef.current === agentFocus.requestId) {
-            return;
-        }
-        const match = agents.find(
-            (agent) => isSamePath(agent.path, agentFocus.path) && (agent.position?.startLine ?? 0) === agentFocus.startLine
-        );
-        if (!match) {
-            return;
-        }
-        appliedFocusRef.current = agentFocus.requestId;
-        setSelectedKey(agentKey(match));
-        setShowAddAgent(false);
-    }, [agents, agentFocus]);
-
-    if (projectStructure && !selectedAgent) {
-        sawEmptyRef.current = true;
-    }
-    const canvasVisible = canvasReady || !sawEmptyRef.current;
-
-    const handleCanvasReady = useCallback(() => {
-        clearTimeout(revealTimerRef.current);
-        revealTimerRef.current = setTimeout(() => setCanvasReady(true), READY_SETTLE_MS);
-    }, []);
-
-    useEffect(() => () => clearTimeout(revealTimerRef.current), []);
-
-    useEffect(() => {
-        if (!projectStructure) {
-            return;
-        }
-        if (!selectedAgent) {
-            clearTimeout(revealTimerRef.current);
-            setCanvasReady(false);
-            setEmptyMounted(true);
-            return;
-        }
-        if (!sawEmptyRef.current) {
-            return;
-        }
-        const fallback = setTimeout(() => setCanvasReady(true), READY_FALLBACK_MS);
-        return () => clearTimeout(fallback);
-    }, [projectStructure, selectedAgent]);
-
-    useEffect(() => {
-        if (!canvasVisible) {
-            return;
-        }
-        const timer = setTimeout(() => setEmptyMounted(false), CROSSFADE_MS);
-        return () => clearTimeout(timer);
-    }, [canvasVisible]);
+    const navActions = canToggle ? <ViewToggle view={view} onChange={setView} /> : undefined;
 
     const integrationTitle = projectStructure?.projectTitle || projectStructure?.projectName;
     const deployableIntegrationTypes = useMemo(() => getIntegrationTypes(projectStructure), [projectStructure]);
@@ -298,6 +276,23 @@ export function AgentBuilderOverview({ projectPath, agentFocus }: AgentBuilderOv
             type: EVENT_TYPE.OPEN_VIEW,
             location: { view: MACHINE_VIEW.ViewConfigVariables },
         });
+    };
+
+    const handleAddConstruct = () => {
+        rpcClient.getVisualizerRpcClient().openView({
+            type: EVENT_TYPE.OPEN_VIEW,
+            location: { view: MACHINE_VIEW.BIComponentView },
+        });
+    };
+
+    const handleCreateManually = () => {
+        if (isLibrary) {
+            setShowAddLibraryArtifact(true);
+        } else if (view === "design") {
+            handleAddConstruct();
+        } else {
+            setShowAddAgent(true);
+        }
     };
 
     const handleRun = () => {
@@ -350,7 +345,7 @@ export function AgentBuilderOverview({ projectPath, agentFocus }: AgentBuilderOv
                 />
                 {!compactHeader && "Configure"}
             </Button>
-            {agents.length > 0 && (
+            {!packageIsEmpty && (
                 <>
                     <Button
                         appearance="icon"
@@ -428,7 +423,7 @@ export function AgentBuilderOverview({ projectPath, agentFocus }: AgentBuilderOv
     return (
         <>
             <Page>
-                {isInProject && <TopNavigationBar projectPath={projectPath} bordered />}
+                {isInProject && <TopNavigationBar projectPath={projectPath} bordered actions={navActions} />}
                 <PageHeader
                     title={integrationTitle}
                     actions={headerActions}
@@ -438,49 +433,59 @@ export function AgentBuilderOverview({ projectPath, agentFocus }: AgentBuilderOv
                     hasTopNavigationBar={isInProject}
                 />
                 <MainContent>
-                    <Panel bordered={canvasVisible}>
+                    <Panel bordered={!showEmpty}>
                         <Stage>
                             {selectedAgent && (
-                                <Layer $show={canvasVisible}>
-                                    <AgentTabs
-                                        agents={agents}
-                                        selectedKey={agentKey(selectedAgent)}
-                                        onSelect={(agent) => setSelectedKey(agentKey(agent))}
-                                        onAdd={() => setShowAddAgent(true)}
+                                <CanvasLayer
+                                    show={showAgent}
+                                    bar={
+                                        <AgentTabs
+                                            agents={agents}
+                                            selectedKey={agentKey(selectedAgent)}
+                                            onSelect={selectAgent}
+                                            onAdd={() => setShowAddAgent(true)}
+                                        />
+                                    }
+                                >
+                                    <LazyFocusFlowDiagram
+                                        key={agentKey(selectedAgent)}
+                                        embedded={true}
+                                        projectPath={projectPath}
+                                        filePath={selectedAgent.path}
+                                        position={selectedAgent.position}
+                                        view={
+                                            selectedAgent.moduleName === "ai"
+                                                ? FOCUS_FLOW_DIAGRAM_VIEW.AGENT
+                                                : FOCUS_FLOW_DIAGRAM_VIEW.TYPED_AGENT
+                                        }
+                                        onUpdate={() => { }}
+                                        onReady={onAgentReady}
                                     />
-                                    <CanvasSlot>
-                                        <React.Suspense
-                                            fallback={
-                                                <CenteredSlot>
-                                                    <ProgressRing color={ThemeColors.PRIMARY} />
-                                                </CenteredSlot>
-                                            }
-                                        >
-                                            <LazyFocusFlowDiagram
-                                                key={agentKey(selectedAgent)}
-                                                embedded={true}
-                                                projectPath={projectPath}
-                                                filePath={selectedAgent.path}
-                                                position={selectedAgent.position}
-                                                view={
-                                                    selectedAgent.moduleName === "ai"
-                                                        ? FOCUS_FLOW_DIAGRAM_VIEW.AGENT
-                                                        : FOCUS_FLOW_DIAGRAM_VIEW.TYPED_AGENT
-                                                }
-                                                onUpdate={() => { }}
-                                                onReady={handleCanvasReady}
-                                            />
-                                        </React.Suspense>
-                                    </CanvasSlot>
-                                </Layer>
+                                </CanvasLayer>
                             )}
-                            {(!selectedAgent || emptyMounted) && (
-                                <Layer $show={!canvasVisible}>
+                            {designMounted && (
+                                <CanvasLayer
+                                    show={showDesign}
+                                    bar={
+                                        <DesignBar>
+                                            <DesignTitle>Design</DesignTitle>
+                                            <StripAction
+                                                label="Add Artifact"
+                                                title="Add an artifact to this package"
+                                                onClick={handleAddConstruct}
+                                            />
+                                        </DesignBar>
+                                    }
+                                >
+                                    <LazyComponentDiagram projectStructure={projectStructure} />
+                                </CanvasLayer>
+                            )}
+                            {(showEmpty || emptyMounted) && (
+                                <Layer $show={showEmpty}>
                                     <EmptyState
                                         isLibrary={isLibrary}
-                                        onCreateFromScratch={() =>
-                                            isLibrary ? setShowAddLibraryArtifact(true) : setShowAddAgent(true)
-                                        }
+                                        view={view}
+                                        onCreateFromScratch={handleCreateManually}
                                     />
                                 </Layer>
                             )}

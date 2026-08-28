@@ -283,11 +283,79 @@ export const resetDiagramZoomAndPosition = (file?: string) => {
     localStorage.setItem("diagram-offset-y", "0");
 };
 
-export const centerDiagram = (engine: DiagramEngine) => {
-    if (engine.getCanvas()?.getBoundingClientRect) {
-        // zoom to fit nodes and center diagram
-        engine.zoomToFitNodes({ margin: 40, maxZoom: 1 });
+export const FIT_MARGIN = 40;
+const FIT_MAX_ZOOM = 1;
+const MIN_FITTABLE_CANVAS = 50;
+
+export function fitDiagram(engine: DiagramEngine) {
+    const canvas = engine.getCanvas();
+    if (!canvas?.getBoundingClientRect) {
+        return;
     }
+    const canvasRect = canvas.getBoundingClientRect();
+    if (canvasRect.width < MIN_FITTABLE_CANVAS || canvasRect.height < MIN_FITTABLE_CANVAS) {
+        return;
+    }
+
+    const model = engine.getModel();
+    const zoom = model.getZoomLevel() / 100;
+    const ink = measureNodeInk(engine, canvas, canvasRect, zoom);
+    if (!ink) {
+        engine.zoomToFitNodes({ margin: FIT_MARGIN, maxZoom: FIT_MAX_ZOOM });
+        return;
+    }
+
+    const nextZoom = Math.min(
+        (canvasRect.width - FIT_MARGIN * 2) / ink.width,
+        (canvasRect.height - FIT_MARGIN * 2) / ink.height,
+        FIT_MAX_ZOOM
+    );
+    model.setZoomLevel(nextZoom * 100);
+    model.setOffset(
+        canvasRect.width / 2 - (ink.left + ink.width / 2) * nextZoom,
+        canvasRect.height / 2 - (ink.top + ink.height / 2) * nextZoom
+    );
+    engine.repaintCanvas();
+}
+
+function measureNodeInk(engine: DiagramEngine, canvas: HTMLDivElement, canvasRect: DOMRect, zoom: number) {
+    const offsetX = engine.getModel().getOffsetX();
+    const offsetY = engine.getModel().getOffsetY();
+    let left = Infinity;
+    let top = Infinity;
+    let right = -Infinity;
+    let bottom = -Infinity;
+
+    engine.getModel().getNodes().forEach((node) => {
+        const element = canvas.querySelector<HTMLElement>(`.node[data-nodeid="${node.getID()}"]`);
+        if (!element) {
+            return;
+        }
+        [element, ...Array.from(element.querySelectorAll<HTMLElement>("*"))].forEach((box) => {
+            const rect = box.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) {
+                return;
+            }
+            left = Math.min(left, rect.left);
+            top = Math.min(top, rect.top);
+            right = Math.max(right, rect.right);
+            bottom = Math.max(bottom, rect.bottom);
+        });
+    });
+
+    if (!isFinite(left) || right - left < 1 || bottom - top < 1) {
+        return undefined;
+    }
+    return {
+        left: (left - canvasRect.left - offsetX) / zoom,
+        top: (top - canvasRect.top - offsetY) / zoom,
+        width: (right - left) / zoom,
+        height: (bottom - top) / zoom,
+    };
+}
+
+export const centerDiagram = (engine: DiagramEngine) => {
+    fitDiagram(engine);
 };
 
 export const getModelId = (nodeId: string) => {

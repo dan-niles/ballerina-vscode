@@ -17,7 +17,7 @@
  */
 
 import { CSSProperties, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { keyframes } from "@emotion/react";
+import { css, keyframes } from "@emotion/react";
 import styled from "@emotion/styled";
 import { AgentRunStatus, AIMachineSnapshot, AIMachineStateValue } from "@wso2/ballerina-core";
 import { useRpcContext } from "@wso2/ballerina-rpc-client";
@@ -47,6 +47,7 @@ import WaitingForLogin from "../../AIPanel/WaitingForLoginSection";
 import { DisabledWindow } from "../../AIPanel/DisabledSection";
 import { PopupModal } from "../../../components/PopupModal";
 import { CloseButton } from "../Connection/styles";
+import { OverviewView } from "./ViewToggle";
 
 const CONTENT_WIDTH = 760;
 
@@ -165,6 +166,53 @@ const LIBRARY_EXAMPLES: Example[] = [
     },
 ];
 
+const INTEGRATION_EXAMPLES: Example[] = [
+    {
+        name: "MCP Server",
+        description: "Exposes GitHub actions as MCP tools",
+        icon: "plug",
+        isCodicon: true,
+        prompt:
+            "Create an MCP server that exposes tools to search GitHub issues in a repository, add a label to an issue, and post a comment on an issue.",
+    },
+    {
+        name: "REST API",
+        description: "Serves Salesforce records over HTTP",
+        icon: "globe",
+        isCodicon: true,
+        prompt:
+            "Create an HTTP service with a resource that takes an account name and returns the matching Salesforce account with its open opportunities.",
+    },
+    {
+        name: "Scheduled Sync",
+        description: "Posts a daily Shopify summary to Slack",
+        icon: "clock",
+        isCodicon: true,
+        prompt:
+            "Create an automation that runs every morning, reads the Shopify orders created in the last day, and posts a summary of them to a Slack channel.",
+    },
+    {
+        name: "Event Pipeline",
+        description: "Turns GitHub events into Salesforce records",
+        icon: "arrow-swap",
+        isCodicon: true,
+        prompt:
+            "Create a service triggered by GitHub issue events that creates a matching case record in Salesforce for each newly opened issue.",
+    },
+];
+
+const INTEGRATION_COPY: EmptyStateCopy = {
+    heading: "What should this integration do?",
+    placeholder: "Describe what you want this integration to do…",
+    inputLabel: "Describe the integration you want to build",
+    manualLabel: "Add an artifact manually",
+    examples: INTEGRATION_EXAMPLES,
+    hiddenContext:
+        "The target package is a supporting integration that other packages and agents depend on. Build the " +
+        "services, automations or MCP servers described. Do not add an AI agent, a model provider or a chat " +
+        "trigger unless the request explicitly asks for one.",
+};
+
 const AGENT_COPY: EmptyStateCopy = {
     heading: "What should your agent do?",
     placeholder: "Describe what you want your agent to do…",
@@ -207,6 +255,19 @@ const Intro = styled.div`
     align-items: center;
     gap: 8px;
     margin-top: 8px;
+`;
+
+const modeFade = keyframes`
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+`;
+
+const modeSwap = (delay: number) => css`
+    animation: ${modeFade} 480ms ${delay}ms both cubic-bezier(0.22, 0.61, 0.36, 1);
+
+    @media (prefers-reduced-motion: reduce) {
+        animation: none;
+    }
 `;
 
 const riseIn = keyframes`
@@ -285,6 +346,7 @@ const CopilotName = styled.div`
 `;
 
 const Heading = styled.h2`
+    ${modeSwap(0)}
     margin: 0;
     font-size: 28px;
     font-weight: 300;
@@ -426,6 +488,7 @@ const Notice = styled.div`
 `;
 
 const ExamplesBlock = styled.div`
+    ${modeSwap(90)}
     width: 100%;
     max-width: ${CONTENT_WIDTH}px;
     margin-top: 40px;
@@ -507,6 +570,7 @@ const MANUAL_BUTTON_SX = {
 } as CSSProperties;
 
 const ManualRow = styled.div`
+    ${modeSwap(180)}
     display: flex;
     align-items: center;
     gap: 8px;
@@ -537,10 +601,11 @@ const LinkButton = styled.button`
 interface EmptyStateProps {
     onCreateFromScratch: () => void;
     isLibrary?: boolean;
+    view?: OverviewView;
 }
 
-export function EmptyState({ onCreateFromScratch, isLibrary }: EmptyStateProps) {
-    const copy = isLibrary ? LIBRARY_COPY : AGENT_COPY;
+export function EmptyState({ onCreateFromScratch, isLibrary, view }: EmptyStateProps) {
+    const copy = isLibrary ? LIBRARY_COPY : view === "design" ? INTEGRATION_COPY : AGENT_COPY;
     const assistantName = useAssistantName();
     const productMode = useProductMode();
     const { rpcClient } = useRpcContext();
@@ -801,7 +866,7 @@ export function EmptyState({ onCreateFromScratch, isLibrary }: EmptyStateProps) 
                         <ExitGroup $out={showRun}>
                             <CopilotName>{assistantName}</CopilotName>
                             <Intro>
-                                <Heading>{copy.heading}</Heading>
+                                <Heading key={`heading-${copy.heading}`}>{copy.heading}</Heading>
                             </Intro>
                         </ExitGroup>
 
@@ -876,7 +941,7 @@ export function EmptyState({ onCreateFromScratch, isLibrary }: EmptyStateProps) 
                         </ExitGroup>
 
                         <ExitGroup $out={showRun}>
-                            <ExamplesBlock>
+                            <ExamplesBlock key={`examples-${copy.heading}`}>
                                 <ExamplesLabel>Examples</ExamplesLabel>
                                 <Cards>
                                     {copy.examples.map((example) => (
@@ -900,7 +965,7 @@ export function EmptyState({ onCreateFromScratch, isLibrary }: EmptyStateProps) 
                                 </Cards>
                             </ExamplesBlock>
 
-                            <ManualRow>
+                            <ManualRow key={`manual-${copy.heading}`}>
                                 or
                                 <Button
                                     appearance="secondary"

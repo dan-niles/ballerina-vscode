@@ -308,7 +308,10 @@ function triggerLabel(trigger: ProjectStructureArtifactResponse) {
     return module ? module.charAt(0).toUpperCase() + module.slice(1) : trigger.name;
 }
 
-function TriggerGlyph({ trigger }: { trigger: ProjectStructureArtifactResponse }) {
+function TriggerGlyph({ trigger, size = TRIGGER_ICON_SIZE }: {
+    trigger: ProjectStructureArtifactResponse;
+    size?: number;
+}) {
     const module = trigger.moduleName ?? trigger.type;
     const registered: (BrandIcon & { isCodicon?: boolean }) | undefined =
         resolveEntryTypeGlyph(module) ?? resolveBrandIcon(module);
@@ -320,8 +323,8 @@ function TriggerGlyph({ trigger }: { trigger: ProjectStructureArtifactResponse }
         <Icon
             name={glyphName}
             isCodicon={registered?.isCodicon}
-            sx={{ width: TRIGGER_ICON_SIZE, height: TRIGGER_ICON_SIZE, ...tint }}
-            iconSx={{ fontSize: TRIGGER_ICON_SIZE, ...tint }}
+            sx={{ width: size, height: size, ...tint }}
+            iconSx={{ fontSize: size, ...tint }}
         />
     );
     if (registered) {
@@ -333,7 +336,7 @@ function TriggerGlyph({ trigger }: { trigger: ProjectStructureArtifactResponse }
         ? trigger.iconLight ?? trigger.iconDark
         : trigger.iconDark ?? trigger.iconLight;
 
-    return imageUrl ? <ImageWithFallback imageUrl={imageUrl} fallbackEl={glyph} size={TRIGGER_ICON_SIZE} /> : glyph;
+    return imageUrl ? <ImageWithFallback imageUrl={imageUrl} fallbackEl={glyph} size={size} /> : glyph;
 }
 
 function byModule(artifacts: ProjectStructureArtifactResponse[]) {
@@ -412,6 +415,7 @@ export function AgentBuilderWorkspaceOverview({ isInDevant }: AgentBuilderWorksp
                 ...(project.directoryMap[DIRECTORY_MAP.AGENT] ?? []).map((agent) => agent.name),
                 ...(project.directoryMap[DIRECTORY_MAP.AGENT_DEFINITION] ?? []).map((agent) => agent.name),
             ];
+            const triggers = project.directoryMap[DIRECTORY_MAP.SERVICE] ?? [];
             return {
                 id: project.projectName,
                 name: project.projectTitle || project.projectName,
@@ -420,7 +424,9 @@ export function AgentBuilderWorkspaceOverview({ isInDevant }: AgentBuilderWorksp
                 allAgents,
                 shownAgents: allAgents.slice(0, MAX_AGENT_PILLS),
                 hiddenAgentCount: Math.max(0, allAgents.length - MAX_AGENT_PILLS),
-                triggers: project.directoryMap[DIRECTORY_MAP.SERVICE] ?? [],
+                triggers,
+                isEmpty: allAgents.length === 0 && triggers.length === 0,
+                badgeTrigger: allAgents.length === 0 ? triggers[0] : undefined,
                 connections: (project.directoryMap[DIRECTORY_MAP.CONNECTION] ?? []).filter(
                     (connection) => !isAgentInternal(connection)
                 ),
@@ -589,13 +595,17 @@ export function AgentBuilderWorkspaceOverview({ isInDevant }: AgentBuilderWorksp
                                             sx={{ width: 24, height: 24 }}
                                             iconSx={{ fontSize: 24, color: "inherit" }}
                                         />
-                                        {!item.isLibrary && (
+                                        {!item.isLibrary && !item.isEmpty && (
                                             <IconBadge className="icon-badge">
-                                                <Icon
-                                                    name="bi-ai-agent"
-                                                    sx={{ width: 13, height: 13 }}
-                                                    iconSx={{ fontSize: 13, color: "inherit" }}
-                                                />
+                                                {item.badgeTrigger ? (
+                                                    <TriggerGlyph trigger={item.badgeTrigger} size={13} />
+                                                ) : (
+                                                    <Icon
+                                                        name="bi-ai-agent"
+                                                        sx={{ width: 13, height: 13 }}
+                                                        iconSx={{ fontSize: 13, color: "inherit" }}
+                                                    />
+                                                )}
                                             </IconBadge>
                                         )}
                                     </IconTile>
@@ -630,9 +640,14 @@ export function AgentBuilderWorkspaceOverview({ isInDevant }: AgentBuilderWorksp
                                             +{item.hiddenAgentCount} more
                                         </MoreCount>
                                     )}
-                                    {!item.isLibrary && item.allAgents.length === 0 && (
-                                        <MutedNote>No agents yet</MutedNote>
-                                    )}
+                                    {!item.isLibrary && item.allAgents.length === 0 &&
+                                        (item.isEmpty ? (
+                                            <MutedNote>Empty package</MutedNote>
+                                        ) : (
+                                            <Pill>
+                                                <PillLabel>Integration</PillLabel>
+                                            </Pill>
+                                        ))}
                                     <IntegrationIcons triggers={item.triggers} connections={item.connections} />
                                 </PillRow>
                             </Card>

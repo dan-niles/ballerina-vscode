@@ -107,10 +107,11 @@ interface TopNavigationBarProps {
     onBack?: () => void;
     onHome?: () => void;
     bordered?: boolean;
+    actions?: React.ReactNode;
 }
 
 export function TopNavigationBar(props: TopNavigationBarProps) {
-    const { projectPath, onBack, onHome, bordered } = props;
+    const { projectPath, onBack, onHome, bordered, actions } = props;
     const { rpcClient } = useRpcContext();
     const [history, setHistory] = useState<HistoryEntry[]>([]);
     const [workspaceType, setWorkspaceType] = useState<WorkspaceTypeResponse>(null);
@@ -324,6 +325,7 @@ export function TopNavigationBar(props: TopNavigationBarProps) {
                     );
                 })}
             </BreadcrumbContainer>
+            {actions}
             {/** TODO: Uncomment if want to show popup icon */}
             {/* <Button tooltip="Manage WSO2 Cloud" appearance="icon" onClick={(e)=>setDevantBtnAnchor(e.currentTarget as HTMLElement)}>
                 <Icon name="Devant" sx={{ fontSize: "18px", width: "18px" }} />

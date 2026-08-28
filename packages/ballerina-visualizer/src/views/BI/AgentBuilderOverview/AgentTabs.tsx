@@ -24,7 +24,7 @@ import { Codicon, Icon, Popover, SearchBox, ThemeColors } from "@wso2/ui-toolkit
 const AGENT_ACCENT = "var(--vscode-button-background)";
 const ICON_SIZE = 18;
 
-const Strip = styled.div`
+export const Strip = styled.div`
     display: flex;
     align-items: stretch;
     flex-shrink: 0;
@@ -232,6 +232,23 @@ function ScrollEdge({ side, onScroll }: { side: "left" | "right"; onScroll: () =
     );
 }
 
+export function StripAction({
+    label,
+    title,
+    onClick,
+}: {
+    label: string;
+    title: string;
+    onClick: () => void;
+}) {
+    return (
+        <AddTab active={false} onClick={onClick} title={title}>
+            <Icon name="bi-plus" sx={GLYPH_SX} iconSx={GLYPH_ICON_SX} />
+            <TabLabel>{label}</TabLabel>
+        </AddTab>
+    );
+}
+
 interface AgentTabsProps {
     agents: ProjectStructureArtifactResponse[];
     selectedKey: string;
@@ -388,10 +405,7 @@ export function AgentTabs({ agents, selectedKey, onSelect, onAdd }: AgentTabsPro
                     </PickerList>
                 </PickerPanel>
             </Popover>
-            <AddTab active={false} onClick={onAdd} title="Add an agent to this project">
-                <Icon name="bi-plus" sx={GLYPH_SX} iconSx={GLYPH_ICON_SX} />
-                <TabLabel>Add Agent</TabLabel>
-            </AddTab>
+            <StripAction label="Add Agent" title="Add an agent to this project" onClick={onAdd} />
         </Strip>
     );
 }
