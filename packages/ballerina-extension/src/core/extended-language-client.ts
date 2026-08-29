@@ -317,8 +317,11 @@ import { debug, handlePullModuleProgress } from "../utils";
 import { CMP_LS_CLIENT_COMPLETIONS, CMP_LS_CLIENT_DIAGNOSTICS, getMessageObject, sendTelemetryEvent, TM_EVENT_LANG_CLIENT } from "../features/telemetry";
 import { DefinitionParams, InitializeParams, InitializeResult, Location, LocationLink, TextDocumentPositionParams } from 'vscode-languageserver-protocol';
 import { updateProjectArtifacts } from "../utils/project-artifacts";
+import { checkModuleCacheError } from "../utils/module-cache";
 import { RPCLayer } from "../../src/RPCLayer";
 import { VisualizerWebview } from "../../src/views/visualizer/webview";
+
+const TELEMETRY_EVENT = "telemetry/event";
 
 export const CONNECTOR_LIST_CACHE = "CONNECTOR_LIST_CACHE";
 export const HTTP_CONNECTOR_LIST_CACHE = "HTTP_CONNECTOR_LIST_CACHE";
@@ -584,6 +587,7 @@ export class ExtendedLangClient extends LanguageClient implements ExtendedLangCl
     private ballerinaExtInstance: BallerinaExtension | undefined;
     private timeConsumption: APITimeConsumption;
     private initBalRequestSent = false;
+    private moduleCacheHandlerRegistered = false;
 
     constructor(id: string, name: string, serverOptions: ServerOptions, clientOptions: LanguageClientOptions,
         ballerinaExtInstance: BallerinaExtension | undefined, forceDebug?: boolean) {
@@ -594,11 +598,11 @@ export class ExtendedLangClient extends LanguageClient implements ExtendedLangCl
     }
     init?: (params: InitializeParams) => Promise<InitializeResult>;
 
-    // Records all LS request/response traffic to fixtures when BAL_RECORD_FIXTURES is set.
-    // When not recording this is a single branch on a cached const per request (no env read).
-    // See src/test-support/fixtureRecorder.ts.
+    // Watches every response for a stale module cache, and records LS traffic to fixtures when
+    // BAL_RECORD_FIXTURES is set. See src/test-support/fixtureRecorder.ts.
     public sendRequest<R = any>(...args: any[]): Promise<R> {
         const result = (super.sendRequest as any)(...args) as Promise<R>;
+        result.then(checkModuleCacheError, () => { /* ignore rejected LS calls */ });
         if (RECORDING_ENABLED) {
             const method = typeof args[0] === "string" ? args[0] : args[0]?.method;
             const maybeParams = args[1];
@@ -635,6 +639,17 @@ export class ExtendedLangClient extends LanguageClient implements ExtendedLangCl
 
     registerPublishDiagnostics(): void {
         this.onNotification(VSCODE_APIS.PUBLISH_DIAGNOSTICS, () => {
+        });
+    }
+
+    // Catches the failures that never reach a response: didOpen, module pulls, runner diagnostics.
+    registerModuleCacheErrorHandler(): void {
+        if (this.moduleCacheHandlerRegistered) {
+            return;
+        }
+        this.moduleCacheHandlerRegistered = true;
+        this.onNotification(TELEMETRY_EVENT, (event: { errorMessage?: string }) => {
+            checkModuleCacheError({ errorMsg: event?.errorMessage });
         });
     }
 
