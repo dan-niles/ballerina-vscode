@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     DIRECTORY_MAP,
+    ProjectDirectoryMap,
     ProjectStructure,
     ProjectStructureArtifactResponse,
     isSamePath,
@@ -26,7 +27,13 @@ import {
 import { agentKey } from "./AgentTabs";
 import { OverviewView } from "./ViewToggle";
 
-const MCP_MODULE = "mcp";
+const DIAGRAM_ARTIFACTS: (keyof ProjectDirectoryMap)[] = [
+    DIRECTORY_MAP.SERVICE,
+    DIRECTORY_MAP.AUTOMATION,
+    DIRECTORY_MAP.LISTENER,
+    DIRECTORY_MAP.CONNECTION,
+    DIRECTORY_MAP.WORKFLOW,
+];
 
 export interface AgentFocusRequest {
     path: string;
@@ -47,11 +54,7 @@ interface OverviewSelection {
 }
 
 function hasDrawableArtifact(projectStructure?: ProjectStructure): boolean {
-    const map = projectStructure?.directoryMap;
-    const hasMcpService = (map?.[DIRECTORY_MAP.SERVICE] ?? []).some(
-        (service) => service.moduleName === MCP_MODULE
-    );
-    return hasMcpService || (map?.[DIRECTORY_MAP.WORKFLOW]?.length ?? 0) > 0;
+    return DIAGRAM_ARTIFACTS.some((kind) => (projectStructure?.directoryMap?.[kind]?.length ?? 0) > 0);
 }
 
 export function useOverviewSelection(
