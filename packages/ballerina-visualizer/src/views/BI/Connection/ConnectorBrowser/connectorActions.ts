@@ -203,7 +203,8 @@ export function normalizeConnectorSearchCategories(
 export function buildConnectionSelectField(
     connectorCodeData: CodeData,
     ballerinaType: string | undefined,
-    value: string
+    value: string,
+    existingConnections?: { name: string; origin: "dependency" | "agent" }[]
 ): Record<string, unknown> {
     const targetType = connectorCodeData.module && connectorCodeData.object
         ? {
@@ -214,6 +215,15 @@ export function buildConnectionSelectField(
             name: connectorCodeData.object,
         }
         : undefined;
+    // Agent definitions know their own class fields with certainty, so seed the options from
+    // that instead of the live "searchNodes" lookup, which can't reliably match a class field
+    // back to a freshly-browsed connector.
+    const initialItems = existingConnections?.map(({ name, origin }) => ({
+        id: name,
+        label: `${name} (${origin === "dependency" ? "Parameter" : "Built-in"})`,
+        value: name,
+        codedata: connectorCodeData,
+    }));
 
     return {
         key: "connection",
@@ -236,6 +246,7 @@ export function buildConnectionSelectField(
             originalName: "connection",
             searchNodesKind: "NEW_CONNECTION",
             ...(targetType && { targetType }),
+            ...(initialItems && { initialItems }),
             data: { connection: connectorCodeData },
         },
     };

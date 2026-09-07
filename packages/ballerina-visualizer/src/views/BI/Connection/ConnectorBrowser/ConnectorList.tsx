@@ -138,6 +138,13 @@ const RowLabel = styled(BaseRowLabel)`
     white-space: nowrap;
 `;
 
+const RowLabelRow = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+`;
+
 const RowDescription = styled(BaseRowDescription)`
     margin-top: 2px;
     -webkit-line-clamp: 1;
@@ -197,7 +204,7 @@ const connectionRowsOf = (category: PanelCategory): PanelNode[] => {
                 label: sub.title,
                 description: `${actions.length} action${actions.length === 1 ? "" : "s"}`,
                 icon: sub.icon ?? actions[0]?.icon,
-                metadata: { connectionActions: actions },
+                metadata: { connectionActions: actions, origin: sub.origin },
             } as PanelNode;
         });
 };
@@ -405,7 +412,12 @@ export function ConnectorList(props: ConnectorListProps) {
                                             {node.icon ?? <Codicon name="package" />}
                                         </RowIcon>
                                         <RowText>
-                                            <RowLabel>{node.label}</RowLabel>
+                                            <RowLabelRow>
+                                                <RowLabel>{node.label}</RowLabel>
+                                                {node.metadata?.origin && (
+                                                    <Tag>{node.metadata.origin === "dependency" ? "Parameter" : "Built-in"}</Tag>
+                                                )}
+                                            </RowLabelRow>
                                             {node.description && (
                                                 <RowDescription>{node.description}</RowDescription>
                                             )}

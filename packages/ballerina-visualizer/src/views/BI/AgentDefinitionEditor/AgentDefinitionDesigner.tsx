@@ -1508,6 +1508,10 @@ export function AgentDefinitionDesigner(props: AgentDefinitionDesignerProps) {
                                                     initParameterNames.has(field.name?.value ?? "") ? "dependency" : "agent",
                                                 ])
                                                 .filter(([name]) => Boolean(name))) as Record<string, "dependency" | "agent">,
+                                            connectionFieldTypes: Object.fromEntries((agentClassModel.fields ?? [])
+                                                .filter((field) => !isAgentTypedField(field))
+                                                .map((field) => [field.name?.value, field.type?.value])
+                                                .filter(([name, type]) => Boolean(name) && Boolean(type))) as Record<string, string>,
                                             reservedNames: connectionDependencyReservedNames,
                                         } : undefined}
                                     />

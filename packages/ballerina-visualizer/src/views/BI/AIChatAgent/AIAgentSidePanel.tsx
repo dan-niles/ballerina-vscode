@@ -17,9 +17,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useRpcContext } from "@wso2/ballerina-rpc-client";
-import { NodeList, Category as PanelCategory, FormField, FormImports, FormValues, MarkdownDescription } from "@wso2/ballerina-side-panel";
+import { NodeList, Category as PanelCategory, FormField, FormImports, FormValues } from "@wso2/ballerina-side-panel";
 import {
     BIAvailableNodesRequest,
     Category,
@@ -43,9 +42,7 @@ import {
     Diagnostic,
     RecordTypeField,
     getPrimaryInputType,
-    FieldType,
 } from "@wso2/ballerina-core";
-import { Button, Codicon, Icon, TextField, ThemeColors, Typography } from "@wso2/ui-toolkit";
 
 import {
     convertBICategoriesToSidePanelCategories,
@@ -61,12 +58,10 @@ import { URI, Utils } from "vscode-uri";
 import { cloneDeep } from "lodash";
 import { buildAgentToolFields, buildApprovalToolData, buildRequiresApprovalField, collectLocalFunctionNames, createDefaultParameterValue, createRequiresApprovalField, createToolInputFields, createToolParameters, extractRecordTypeFields, extractRecordTypeFieldsFromEntries, prepareToolInputFields, stripCodeFences, stripCodeFencesInline } from "./formUtils";
 import { ImplementationBadge } from "../../../components/ImplementationBadge";
-import { FUNCTION_CALL, METHOD_CALL, REMOTE_ACTION_CALL, RESOURCE_ACTION_CALL } from "../../../constants";
+import { FUNCTION_CALL, METHOD_CALL, NEW_CONNECTION, REMOTE_ACTION_CALL, RESOURCE_ACTION_CALL } from "../../../constants";
 import { NewToolSelectionMode } from "./NewTool";
 import { buildOAuthFields, fetchOAuthConfigProperties, ZERO_LINE_RANGE } from "./utils";
 import { updateResourcePathProperty } from "./agentTools";
-import { AddConnectionPopupContent } from "../Connection/AddConnectionPopup/AddConnectionPopupContent";
-import { ConnectionConfigurationForm } from "../Connection/ConnectionConfigurationPopup";
 import {
     ActionSelection,
     ConnectorBrowser,
@@ -85,19 +80,7 @@ import {
     suggestToolName,
 } from "./toolForm";
 import { useCreateNode } from "../../../components/ConnectionSelector/useCreateNode";
-import { ConnectorIcon } from "@wso2/bi-diagram";
-import {
-    BackButton,
-    CloseButton,
-    HeaderTitleContainer,
-    PopupContent,
-    PopupFooter,
-    PopupHeader,
-    PopupContainer,
-    PopupOverlay,
-    PopupSubtitle,
-    PopupTitle,
-} from "../Connection/styles";
+import { ConnectionCreationModal } from "./ConnectionCreationModal";
 
 const LoaderContainer = styled.div`
     display: flex;
@@ -106,248 +89,9 @@ const LoaderContainer = styled.div`
     height: 100%;
 `;
 
-const PopupLoaderContainer = styled.div`
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-
-    p {
-        font-size: 13px;
-    }
-`;
-
-const DependencyFormContainer = styled.div`
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-`;
-
-const DependencyConnectorCard = styled.div`
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px;
-    border: 1px solid ${ThemeColors.OUTLINE_VARIANT};
-    border-radius: 8px;
-    background-color: ${ThemeColors.SURFACE_DIM};
-`;
-
-const DependencyConnectorIcon = styled.div`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    width: 48px;
-    height: 48px;
-    border-radius: 8px;
-    background-color: ${ThemeColors.SURFACE_CONTAINER};
-
-    & > img,
-    & > svg {
-        width: 32px;
-        height: 32px;
-    }
-`;
-
-const DependencyConnectorIconImage = styled.div`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-
-    & > img,
-    & > svg {
-        width: 32px;
-        height: 32px;
-        object-fit: contain;
-    }
-`;
-
-const DependencyConnectorContent = styled.div`
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-`;
-
-const DependencyConnectorName = styled(Typography)`
-    margin: 0;
-    color: ${ThemeColors.ON_SURFACE};
-    font-size: 13px;
-    font-weight: 600;
-`;
-
-const DependencyConnectorDescription = styled(MarkdownDescription)`
-    max-height: 3em;
-    margin: 0;
-    overflow: hidden;
-    color: ${ThemeColors.ON_SURFACE_VARIANT};
-    font-size: 13px;
-
-    p,
-    li {
-        margin: 0;
-        overflow: hidden;
-        font-size: 13px;
-    }
-
-    p {
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-    }
-`;
-
-const ReadOnlyField = styled.div`
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-`;
-
-const ReadOnlyValue = styled.div`
-    font-family: var(--vscode-editor-font-family);
-    font-size: 13px;
-    padding: 6px 10px;
-    border: 1px solid var(--vscode-editorWidget-border);
-    border-radius: 4px;
-    background-color: var(--vscode-input-background);
-    color: var(--vscode-foreground);
-`;
-
-const ConnectionMethodOptions = styled.div`
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 20px;
-`;
-
-const ConnectionMethodCard = styled.button`
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
-    padding: 12px;
-    color: ${ThemeColors.ON_SURFACE};
-    background: ${ThemeColors.SURFACE_DIM};
-    border: 1px solid ${ThemeColors.OUTLINE_VARIANT};
-    border-radius: 8px;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-    transition: all 0.2s ease;
-
-    &:hover {
-        background-color: ${ThemeColors.PRIMARY_CONTAINER};
-        border-color: ${ThemeColors.PRIMARY};
-    }
-
-    &:focus-visible {
-        outline: 2px solid ${ThemeColors.PRIMARY};
-        outline-offset: 2px;
-    }
-`;
-
-const ConnectionMethodIcon = styled.div`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    background: ${ThemeColors.SURFACE_CONTAINER};
-    border-radius: 8px;
-`;
-
-const ConnectionMethodDetails = styled.div`
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    min-width: 0;
-`;
-
-const ConnectionMethodTitle = styled.div`
-    font-size: 13px;
-    font-weight: 600;
-`;
-
-const ConnectionMethodDescription = styled.div`
-    margin: 0;
-    color: ${ThemeColors.ON_SURFACE_VARIANT};
-    font-size: 13px;
-    line-height: 1.45;
-`;
-
-const ConnectionMethodChevron = styled.div`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: ${ThemeColors.ON_SURFACE_VARIANT};
-`;
-
-const ConnectionModalStep = styled.div<{
-    $animate: boolean;
-    $direction: "forward" | "backward";
-}>`
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    min-height: 0;
-    --connection-step-offset: ${(props: { $animate: boolean; $direction: "forward" | "backward" }) => props.$direction === "forward" ? "8px" : "-8px"};
-    animation: ${(props: { $animate: boolean; $direction: "forward" | "backward" }) => props.$animate
-        ? "connection-step 150ms ease-out both"
-        : "none"};
-
-    @keyframes connection-step {
-        from {
-            opacity: 0;
-            transform: translateX(var(--connection-step-offset));
-        }
-
-        to {
-            opacity: 1;
-            transform: translateX(0);
-        }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-        animation: none;
-    }
-`;
-
-const AgentConnectionPopupContainer = styled(PopupContainer) <{ $compact?: boolean }>`
-    width: ${(props: { $compact?: boolean }) => props.$compact ? "calc(100vw - 64px) !important" : "80%"};
-    max-width: ${(props: { $compact?: boolean }) => props.$compact ? "680px !important" : "800px"};
-    height: ${(props: { $compact?: boolean }) => props.$compact ? "auto !important" : "80vh"};
-    min-height: ${(props: { $compact?: boolean }) => props.$compact ? "0 !important" : "480px"};
-    max-height: ${(props: { $compact?: boolean }) => props.$compact ? "calc(100vh - 64px) !important" : "800px"};
-`;
-
-const BALLERINA_RESERVED_WORDS = new Set([
-    "abstract", "annotation", "any", "anydata", "as", "ascending", "base16", "base64", "boolean", "break",
-    "byte", "by", "check", "checkpanic", "class", "client", "collect", "commit", "configurable", "conflict",
-    "const", "continue", "decimal", "default", "descending", "distinct", "do", "else", "enum", "equals", "error",
-    "external", "fail", "false", "field", "final", "float", "flush", "for", "foreach", "fork", "from",
-    "function", "future", "group", "handle", "if", "import", "in", "int", "is", "isolated", "join", "json",
-    "key", "let", "limit", "listener", "lock", "map", "match", "module", "never", "new", "null", "object",
-    "on", "order", "outer", "panic", "parameter", "private", "public", "readonly", "record", "remote",
-    "resource", "retry", "return", "returns", "rollback", "select", "self", "service", "source", "start",
-    "stream", "string", "table", "transaction", "transactional", "trap", "true", "type", "typedesc", "typeof",
-    "var", "variable", "version", "wait", "where", "while", "worker", "xml", "xmlns",
-]);
-
 export enum SidePanelView {
     NODE_LIST = "NODE_LIST",
     TOOL_FORM = "TOOL_FORM",
-    CONNECTION_METHOD = "CONNECTION_METHOD",
-    CONNECTOR_SELECT = "CONNECTOR_SELECT",
-    DEPENDENCY_FORM = "DEPENDENCY_FORM",
-    CONNECTION_CONFIG = "CONNECTION_CONFIG",
     CONNECTOR_WIZARD = "CONNECTOR_WIZARD",
 }
 
@@ -358,6 +102,7 @@ export interface ConnectionDependencyConfig {
     inputNames: string[];
     connectionFieldNames: string[];
     connectionOrigins: Record<string, "dependency" | "agent">;
+    connectionFieldTypes: Record<string, string>;
     reservedNames: string[];
 }
 
@@ -431,7 +176,7 @@ export function AIAgentSidePanel(props: BIFlowDiagramProps) {
     const { rpcClient } = useRpcContext();
     const dependencyMode = Boolean(connectionDependency);
 
-    const connectorFirst = mode === NewToolSelectionMode.CONNECTION && !dependencyMode;
+    const connectorFirst = mode === NewToolSelectionMode.CONNECTION;
 
     const [sidePanelView, setSidePanelView] = useState<SidePanelView>(
         connectorFirst ? SidePanelView.CONNECTOR_WIZARD : SidePanelView.NODE_LIST
@@ -456,20 +201,13 @@ export function AIAgentSidePanel(props: BIFlowDiagramProps) {
             ? { startLine: agentNode.codedata.lineRange.startLine, endLine: agentNode.codedata.lineRange.endLine }
             : { startLine: { line: 0, offset: 0 }, endLine: { line: 0, offset: 0 } }
     );
-    const [depClientType, setDepClientType] = useState<string>("");
-    const [depImports, setDepImports] = useState<{ [prefix: string]: string }>({});
-    const [depName, setDepName] = useState<string>("");
-    const [depNameError, setDepNameError] = useState<string>("");
-    const [depSaving, setDepSaving] = useState<boolean>(false);
-    const [depConnectorLoading, setDepConnectorLoading] = useState<boolean>(false);
-    const [connectionMethod, setConnectionMethod] = useState<"dependency" | "agent">("dependency");
-    const [configuredConnector, setConfiguredConnector] = useState<AvailableNode>();
-    const [dependencyConnector, setDependencyConnector] = useState<AvailableNode>();
-    const [connectionModalDirection, setConnectionModalDirection] = useState<"forward" | "backward">("forward");
-    const [shouldAnimateConnectionStep, setShouldAnimateConnectionStep] = useState<boolean>(false);
     const addedDepNamesRef = useRef<string[]>([]);
     const addedAgentConnectionNamesRef = useRef<string[]>([]);
     const pendingDependencyRefreshRef = useRef<boolean>(false);
+    // Set while the connection-creation step was launched from the Tool Form's "Create Connection"
+    // prompt (dependency mode only), so completion can fill the field back in instead of resetting the panel.
+    const pendingConnectionFieldRef = useRef<{ onCreated: (variableName: string) => void } | undefined>(undefined);
+    const pendingCreatedConnectionNameRef = useRef<string>("");
     const initialCategoriesRef = useRef<PanelCategory[]>([]);
     const selectedNodeRef = useRef<AvailableNode>(undefined);
     const agentFilePath = useRef<string>(Utils.joinPath(URI.file(projectPath), agentNode?.codedata?.lineRange?.fileName || "agents.bal").fsPath);
@@ -482,12 +220,24 @@ export function AIAgentSidePanel(props: BIFlowDiagramProps) {
     // here (free-typed) signals the LS to scaffold a new correctly-signed predicate.
     const compatibleApprovalFunctionsRef = useRef<string[]>([]);
 
-    const handleCreateNode = useCreateNode(
+    const createGenericNode = useCreateNode(
         agentFilePath.current,
         targetRef.current,
         () => { void fetchNodes(true); },
         { preferModal: true }
     );
+    const [connectionCreationConnector, setConnectionCreationConnector] = useState<AvailableNode | undefined>(undefined);
+
+    // In dependency mode, creating a brand-new connection needs an extra fork (parameter vs.
+    // built-in) instead of the generic connection-creation modal, so intercept just that trigger.
+    const handleCreateNode = (kind: string, onCreated: (variableName: string) => void, nodeCodeData?: CodeData) => {
+        if (dependencyMode && kind === NEW_CONNECTION && nodeCodeData && connectorRef.current) {
+            pendingConnectionFieldRef.current = { onCreated };
+            setConnectionCreationConnector(connectorRef.current);
+            return;
+        }
+        createGenericNode(kind, onCreated, nodeCodeData);
+    };
 
     // Create custom diagnostic filter for Tool Input parameters
     const customDiagnosticFilter = useCallback((diagnostics: Diagnostic[]) => {
@@ -703,10 +453,11 @@ export function AIAgentSidePanel(props: BIFlowDiagramProps) {
         }
         pendingDependencyRefreshRef.current = false;
         void fetchNodes().then(() => {
-            setDepSaving(false);
-            setConfiguredConnector(undefined);
-            setDependencyConnector(undefined);
-            setSidePanelView(SidePanelView.NODE_LIST);
+            const pendingField = pendingConnectionFieldRef.current;
+            const createdName = pendingCreatedConnectionNameRef.current;
+            pendingConnectionFieldRef.current = undefined;
+            pendingCreatedConnectionNameRef.current = "";
+            pendingField?.onCreated(createdName);
         });
     }, [agentNode, dependencyMode]);
 
@@ -951,10 +702,24 @@ export function AIAgentSidePanel(props: BIFlowDiagramProps) {
                 const ballerinaType = getPrimaryInputType(
                     nodeParameterFields[connectionIndex]?.types
                 )?.ballerinaType;
+                // Dependency mode's live "searchNodes" lookup can't reliably match an existing
+                // class field back to a freshly-browsed connector (see connector-type matching
+                // below), so seed the field's options from what the class model already knows
+                // instead of trusting the search to find them.
+                let existingConnections: { name: string; origin: "dependency" | "agent" }[] | undefined;
+                if (dependencyMode && connectionDependency) {
+                    const cd = options.connector.codedata;
+                    const modulePrefix = (cd.module || "").split(".").pop() || cd.module || "";
+                    const connectorType = `${modulePrefix}:${cd.object || "Client"}`;
+                    existingConnections = connectionDependency.connectionFieldNames
+                        .filter((name) => connectionDependency.connectionFieldTypes[name] === connectorType)
+                        .map((name) => ({ name, origin: connectionDependency.connectionOrigins[name] }));
+                }
                 connectionField = buildConnectionSelectField(
                     options.connector.codedata,
                     ballerinaType,
-                    options.connectionName ?? String(connectionProperty?.value ?? "")
+                    options.connectionName ?? String(connectionProperty?.value ?? ""),
+                    existingConnections
                 ) as unknown as FormField;
                 if (connectionIndex >= 0) {
                     nodeParameterFields.splice(connectionIndex, 1);
@@ -1083,166 +848,6 @@ export function AIAgentSidePanel(props: BIFlowDiagramProps) {
             },
             isPopup: true,
         });
-    };
-
-    const suggestDependencyName = (prefix: string): string => {
-        const base = `${prefix}Client`;
-        const existing = new Set([
-            ...(connectionDependency?.reservedNames ?? []),
-            ...addedDepNamesRef.current,
-            ...addedAgentConnectionNamesRef.current,
-        ]);
-        if (!existing.has(base)) return base;
-        let n = 2;
-        while (existing.has(`${base}${n}`)) n++;
-        return `${base}${n}`;
-    };
-
-    const validateDependencyName = (name: string): string => {
-        const trimmed = name.trim();
-        if (!trimmed) return "Name is required.";
-        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) return "Not a valid Ballerina identifier.";
-        if (BALLERINA_RESERVED_WORDS.has(trimmed)) return `"${trimmed}" is a reserved Ballerina keyword.`;
-        const existing = new Set([
-            ...(connectionDependency?.reservedNames ?? []),
-            ...addedDepNamesRef.current,
-            ...addedAgentConnectionNamesRef.current,
-        ]);
-        if (existing.has(trimmed)) return "This name is already used by the agent definition.";
-        return "";
-    };
-
-    const navigateConnectionModal = (view: SidePanelView, direction: "forward" | "backward" = "forward") => {
-        setShouldAnimateConnectionStep(true);
-        setConnectionModalDirection(direction);
-        setSidePanelView(view);
-    };
-
-    const handleAddDependency = () => {
-        setShouldAnimateConnectionStep(false);
-        setSidePanelView(SidePanelView.CONNECTION_METHOD);
-    };
-
-    const handleCreateConnectionInAgent = () => {
-        setConnectionMethod("agent");
-        navigateConnectionModal(SidePanelView.CONNECTOR_SELECT);
-    };
-
-    const handleSelectDependencyConnector = async (connector: AvailableNode) => {
-        if (!connector.codedata) return;
-        setDependencyConnector(connector);
-        setDepConnectorLoading(true);
-        navigateConnectionModal(SidePanelView.DEPENDENCY_FORM);
-        try {
-            await rpcClient.getBIDiagramRpcClient().getNodeTemplate({
-                position: targetRef.current.startLine,
-                filePath: agentFilePath.current,
-                id: connector.codedata,
-            });
-            const cd = connector.codedata;
-            const prefix = (cd.module || "").split(".").pop() || cd.module || "";
-            const clientClass = cd.object || "Client";
-            setDepClientType(`${prefix}:${clientClass}`);
-            setDepImports({ [prefix]: `${cd.org}/${cd.module}` });
-            setDepName(suggestDependencyName(prefix));
-            setDepNameError("");
-        } catch {
-            navigateConnectionModal(SidePanelView.CONNECTOR_SELECT, "backward");
-        } finally {
-            setDepConnectorLoading(false);
-        }
-    };
-
-    const handleSaveDependency = async () => {
-        const error = validateDependencyName(depName);
-        if (error) {
-            setDepNameError(error);
-            return;
-        }
-        setDepSaving(true);
-        const dependencyName = depName.trim();
-        pendingDependencyRefreshRef.current = true;
-        addedDepNamesRef.current.push(dependencyName);
-        try {
-            const field = {
-                isPrivate: true,
-                isFinal: true,
-                codedata: { lineRange: connectionDependency.classLineRange },
-                type: {
-                    metadata: { label: "Client Type", description: "The connection client type" },
-                    enabled: true, editable: false, value: depClientType,
-                    isType: true, optional: false, advanced: false, addNewButton: false,
-                    imports: depImports,
-                    types: [{ fieldType: "TYPE", selected: false }],
-                },
-                name: {
-                    metadata: { label: "Input Name", description: "The name of the injected client" },
-                    enabled: true, editable: true, value: dependencyName,
-                    isType: false, optional: false, advanced: false, addNewButton: false,
-                    types: [{ fieldType: "IDENTIFIER", selected: false }],
-                },
-                defaultValue: {
-                    metadata: { label: "Default Value", description: "" },
-                    enabled: false, editable: true, value: "",
-                    isType: false, optional: false, advanced: false, addNewButton: false,
-                    types: [{ fieldType: "EXPRESSION", selected: true }],
-                },
-                enabled: true, editable: false, optional: false, advanced: false,
-            } as unknown as FieldType;
-
-            await rpcClient.getBIDiagramRpcClient().createClassDependency({
-                filePath: connectionDependency.filePath,
-                field,
-                classLineRange: connectionDependency.classLineRange,
-            });
-        } catch {
-            pendingDependencyRefreshRef.current = false;
-            addedDepNamesRef.current = addedDepNamesRef.current.filter((name) => name !== dependencyName);
-            setDepSaving(false);
-            setDepNameError("Unable to add the connection parameter. Try again.");
-        }
-    };
-
-    const handleSelectAgentConnectionConnector = (connector: AvailableNode) => {
-        if (!connector.codedata) {
-            return;
-        }
-        setConfiguredConnector(connector);
-        navigateConnectionModal(SidePanelView.CONNECTION_CONFIG);
-    };
-
-    const handleSaveAgentConnection = async (configuredConnection: FlowNode) => {
-        const connectionName = String(configuredConnection.properties?.variable?.value ?? "");
-        const error = validateDependencyName(connectionName);
-        if (error) {
-            throw new Error(error);
-        }
-
-        const connection = cloneDeep(configuredConnection);
-        if (connection.properties?.scope) {
-            connection.properties.scope.value = "Local";
-            connection.properties.scope.hidden = true;
-        }
-        pendingDependencyRefreshRef.current = true;
-        addedAgentConnectionNamesRef.current.push(connectionName);
-        try {
-            await rpcClient.getBIDiagramRpcClient().saveClassMember({
-                filePath: connectionDependency.filePath,
-                flowNode: connection,
-                classLineRange: connectionDependency.classLineRange,
-            });
-        } catch (error) {
-            pendingDependencyRefreshRef.current = false;
-            addedAgentConnectionNamesRef.current = addedAgentConnectionNamesRef.current.filter((name) => name !== connectionName);
-            throw error;
-        }
-    };
-
-    const validateAgentConnectionField = (fieldKey: string, value: unknown): string | undefined => {
-        if (fieldKey !== "variable") {
-            return undefined;
-        }
-        return validateDependencyName(String(value ?? "")) || undefined;
     };
 
     const handleOnAddFunction = (view: MACHINE_VIEW, artifactType: DIRECTORY_MAP) => {
@@ -1458,19 +1063,6 @@ export function AIAgentSidePanel(props: BIFlowDiagramProps) {
             "The function you choose becomes the tool.";
     }
 
-    const isConnectionPopupOpen =
-        sidePanelView === SidePanelView.CONNECTION_METHOD ||
-        sidePanelView === SidePanelView.CONNECTOR_SELECT ||
-        sidePanelView === SidePanelView.DEPENDENCY_FORM ||
-        sidePanelView === SidePanelView.CONNECTION_CONFIG;
-    const displayedCategories = dependencyMode && !categories.some((category) => category.title === "Connections")
-        ? [{
-            title: "Connections",
-            description: "No connections available. Click below to add a connection.",
-            items: [],
-        }]
-        : categories;
-
     return (
         <>
             {loading && (
@@ -1505,234 +1097,19 @@ export function AIAgentSidePanel(props: BIFlowDiagramProps) {
                 </div>
             )}
             {!loading && !connectorFirst && sidePanelView !== SidePanelView.TOOL_FORM
-                && displayedCategories.length > 0 && (
+                && categories.length > 0 && (
                 <NodeList
-                    categories={displayedCategories}
+                    categories={categories}
                     onSelect={handleOnSelectNode}
-                    onAddConnection={dependencyMode ? handleAddDependency : handleOnAddConnection}
-                    connectionAddLabel={dependencyMode ? "Add Connection" : undefined}
+                    onAddConnection={handleOnAddConnection}
                     onAddFunction={() => handleOnAddFunction(MACHINE_VIEW.BIFunctionForm, DIRECTORY_MAP.FUNCTION)}
-                    onSearchTextChange={mode !== NewToolSelectionMode.CONNECTION ? (searchText) => handleSearchFunction(searchText, FUNCTION_TYPE.REGULAR, true) : undefined}
+                    onSearchTextChange={(searchText) => handleSearchFunction(searchText, FUNCTION_TYPE.REGULAR, true)}
                     title={"Functions"}
                     description={listDescription}
                     searchPlaceholder={searchPlaceholder}
                     panelBodySx={{ height: "calc(100vh - 140px)" }}
                     alwaysCollapsedCategories={["Imported Functions"]}
                 />
-            )}
-            {isConnectionPopupOpen && createPortal(
-                <>
-                    <PopupOverlay
-                        sx={{
-                            background: ThemeColors.SURFACE_CONTAINER,
-                            opacity: 0.5,
-                            zIndex: 2050,
-                        }}
-                    />
-                    <AgentConnectionPopupContainer
-                        $compact={sidePanelView === SidePanelView.CONNECTION_METHOD}
-                        style={{ zIndex: 2051 }}
-                    >
-                        <ConnectionModalStep
-                            key={sidePanelView}
-                            $animate={shouldAnimateConnectionStep}
-                            $direction={connectionModalDirection}
-                        >
-                            <PopupHeader>
-                                {(sidePanelView === SidePanelView.CONNECTOR_SELECT ||
-                                    sidePanelView === SidePanelView.DEPENDENCY_FORM ||
-                                    sidePanelView === SidePanelView.CONNECTION_CONFIG) && (
-                                        <BackButton
-                                            appearance="icon"
-                                            onClick={() => navigateConnectionModal(
-                                                sidePanelView === SidePanelView.CONNECTOR_SELECT
-                                                    ? SidePanelView.CONNECTION_METHOD
-                                                    : SidePanelView.CONNECTOR_SELECT,
-                                                "backward"
-                                            )}
-                                            disabled={depSaving || depConnectorLoading}
-                                        >
-                                            <Codicon name="arrow-left" />
-                                        </BackButton>
-                                    )}
-                                <HeaderTitleContainer>
-                                    <PopupTitle variant="h2">
-                                        {sidePanelView === SidePanelView.CONNECTION_METHOD && "Add a Connection"}
-                                        {sidePanelView === SidePanelView.CONNECTOR_SELECT && "Select a Connection"}
-                                        {sidePanelView === SidePanelView.DEPENDENCY_FORM && "Add a Connection Parameter"}
-                                        {sidePanelView === SidePanelView.CONNECTION_CONFIG && configuredConnector
-                                            && `Configure ${configuredConnector.metadata.label}`}
-                                    </PopupTitle>
-                                    <PopupSubtitle variant="body2" sx={{ fontSize: "13px" }}>
-                                        {sidePanelView === SidePanelView.CONNECTION_METHOD
-                                            && "Choose how this agent will use this connection."}
-                                        {sidePanelView === SidePanelView.CONNECTOR_SELECT
-                                            && "Choose the type of connection your agent needs."}
-                                        {sidePanelView === SidePanelView.DEPENDENCY_FORM
-                                            && "Give this connection a name to use in your agent."}
-                                        {sidePanelView === SidePanelView.CONNECTION_CONFIG
-                                            && "Configure connection settings for this agent."}
-                                    </PopupSubtitle>
-                                </HeaderTitleContainer>
-                                <CloseButton
-                                    appearance="icon"
-                                    onClick={() => setSidePanelView(SidePanelView.NODE_LIST)}
-                                    disabled={depSaving || depConnectorLoading}
-                                >
-                                    <Codicon name="close" />
-                                </CloseButton>
-                            </PopupHeader>
-                            {sidePanelView === SidePanelView.CONNECTION_METHOD && (
-                                <ConnectionMethodOptions>
-                                    {([
-                                        {
-                                            icon: "bi-connection",
-                                            title: "Add a Connection Parameter",
-                                            description: "Allow a connection to be provided when an agent is created.",
-                                            onClick: () => {
-                                                setConnectionMethod("dependency");
-                                                navigateConnectionModal(SidePanelView.CONNECTOR_SELECT);
-                                            },
-                                        },
-                                        {
-                                            icon: "bi-settings",
-                                            title: "Add a Built-in Connection",
-                                            description: "Create and bundle this connection with the agent definition.",
-                                            onClick: handleCreateConnectionInAgent,
-                                        },
-                                    ] as const).map(({ icon, title, description, onClick }) => (
-                                        <ConnectionMethodCard key={title} onClick={onClick}>
-                                            <ConnectionMethodIcon>
-                                                <Icon name={icon} sx={{ fontSize: 24, width: 24, height: 24 }} />
-                                            </ConnectionMethodIcon>
-                                            <ConnectionMethodDetails>
-                                                <ConnectionMethodTitle>{title}</ConnectionMethodTitle>
-                                                <ConnectionMethodDescription>{description}</ConnectionMethodDescription>
-                                            </ConnectionMethodDetails>
-                                            <ConnectionMethodChevron>
-                                                <Codicon name="chevron-right" />
-                                            </ConnectionMethodChevron>
-                                        </ConnectionMethodCard>
-                                    ))}
-                                </ConnectionMethodOptions>
-                            )}
-                            {sidePanelView === SidePanelView.CONNECTOR_SELECT && (
-                                <PopupContent>
-                                    <AddConnectionPopupContent
-                                        projectPath={projectPath}
-                                        fileName={agentFilePath.current}
-                                        target={targetRef.current.startLine}
-                                        onNavigateToOverview={() => undefined}
-                                        handleSelectConnector={(connector) => {
-                                            if (connectionMethod === "dependency") {
-                                                handleSelectDependencyConnector(connector);
-                                            } else {
-                                                handleSelectAgentConnectionConnector(connector);
-                                            }
-                                        }}
-                                        selectionOnly
-                                    />
-                                </PopupContent>
-                            )}
-                            {sidePanelView === SidePanelView.DEPENDENCY_FORM && (
-                                <>
-                                    <PopupContent>
-                                        {depConnectorLoading ? (
-                                            <PopupLoaderContainer>
-                                                <RelativeLoader message="Loading connector package..." />
-                                            </PopupLoaderContainer>
-                                        ) : (
-                                            <DependencyFormContainer>
-                                                {dependencyConnector && (
-                                                    <DependencyConnectorCard>
-                                                        <DependencyConnectorIcon>
-                                                            {dependencyConnector.metadata.icon ? (
-                                                                <DependencyConnectorIconImage>
-                                                                    <ConnectorIcon url={dependencyConnector.metadata.icon} />
-                                                                </DependencyConnectorIconImage>
-                                                            ) : (
-                                                                <Codicon name="package" sx={{ fontSize: 32, width: 32, height: 32 }} />
-                                                            )}
-                                                        </DependencyConnectorIcon>
-                                                        <DependencyConnectorContent>
-                                                            <DependencyConnectorName>
-                                                                {dependencyConnector.metadata.label}
-                                                            </DependencyConnectorName>
-                                                            <DependencyConnectorDescription
-                                                                description={dependencyConnector.metadata.description || ""}
-                                                            />
-                                                        </DependencyConnectorContent>
-                                                    </DependencyConnectorCard>
-                                                )}
-                                                <Typography
-                                                    variant="body2"
-                                                    sx={{
-                                                        color: "var(--vscode-list-deemphasizedForeground)",
-                                                        fontSize: "13px",
-                                                    }}
-                                                >
-                                                    Connection details will be provided when this agent is used.
-                                                </Typography>
-                                                <ReadOnlyField>
-                                                    <Typography variant="body3" sx={{ fontSize: "13px" }}>
-                                                        Client Type
-                                                    </Typography>
-                                                    <ReadOnlyValue>{depClientType}</ReadOnlyValue>
-                                                </ReadOnlyField>
-                                                <TextField
-                                                    label="Input Name"
-                                                    value={depName}
-                                                    errorMsg={depNameError}
-                                                    onTextChange={(value: string) => { setDepName(value); setDepNameError(""); }}
-                                                />
-                                            </DependencyFormContainer>
-                                        )}
-                                    </PopupContent>
-                                    {!depConnectorLoading && (
-                                        <PopupFooter>
-                                            <Button
-                                                appearance="secondary"
-                                                onClick={() => navigateConnectionModal(SidePanelView.CONNECTOR_SELECT, "backward")}
-                                                disabled={depSaving}
-                                            >
-                                                Back
-                                            </Button>
-                                            <Button appearance="primary" onClick={handleSaveDependency} disabled={depSaving}>
-                                                {depSaving ? "Adding..." : "Add Parameter"}
-                                            </Button>
-                                        </PopupFooter>
-                                    )}
-                                </>
-                            )}
-                            {sidePanelView === SidePanelView.CONNECTION_CONFIG && configuredConnector && (
-                                <ConnectionConfigurationForm
-                                    selectedConnector={configuredConnector}
-                                    fileName={agentFilePath.current}
-                                    target={targetRef.current.startLine}
-                                    onClose={() => setSidePanelView(SidePanelView.NODE_LIST)}
-                                    filteredCategories={[]}
-                                    footerActionButton
-                                    customValidator={validateAgentConnectionField}
-                                    overrideFlowNode={(node) => {
-                                        const connection = cloneDeep(node);
-                                        if (connection.properties?.scope) {
-                                            connection.properties.scope.value = "Local";
-                                            connection.properties.scope.hidden = true;
-                                        }
-                                        connection.codedata.lineRange = {
-                                            fileName: agentNode.codedata.lineRange.fileName,
-                                            startLine: targetRef.current.startLine,
-                                            endLine: targetRef.current.startLine,
-                                        };
-                                        return connection;
-                                    }}
-                                    onSaveConfiguredConnection={handleSaveAgentConnection}
-                                />
-                            )}
-                        </ConnectionModalStep>
-                    </AgentConnectionPopupContainer>
-                </>,
-                document.body
             )}
             {sidePanelView === SidePanelView.TOOL_FORM && (
                 <ArtifactForm
@@ -1772,6 +1149,27 @@ export function AIAgentSidePanel(props: BIFlowDiagramProps) {
                             index: 0,
                         },
                     ]}
+                />
+            )}
+            {connectionCreationConnector && (
+                <ConnectionCreationModal
+                    connector={connectionCreationConnector}
+                    connectionDependency={connectionDependency}
+                    additionalReservedNames={[...addedDepNamesRef.current, ...addedAgentConnectionNamesRef.current]}
+                    agentFilePath={agentFilePath.current}
+                    targetLineRange={targetRef.current}
+                    classFileName={agentNode.codedata.lineRange.fileName}
+                    onSaved={(variableName, origin) => {
+                        if (origin === "dependency") {
+                            addedDepNamesRef.current.push(variableName);
+                        } else {
+                            addedAgentConnectionNamesRef.current.push(variableName);
+                        }
+                        pendingCreatedConnectionNameRef.current = variableName;
+                        pendingDependencyRefreshRef.current = true;
+                        setConnectionCreationConnector(undefined);
+                    }}
+                    onClose={() => setConnectionCreationConnector(undefined)}
                 />
             )}
         </>

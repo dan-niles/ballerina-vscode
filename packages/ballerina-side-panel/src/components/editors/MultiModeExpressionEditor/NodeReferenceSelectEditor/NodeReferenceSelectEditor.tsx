@@ -156,10 +156,11 @@ export const NodeReferenceSelectEditor: React.FC<NodeReferenceSelectEditorProps>
                 .filter(node => node.properties?.variable?.value)
                 .map(node => {
                     const iconUrl = node.metadata?.icon;
+                    const variableName = String(node.properties.variable.value);
                     return {
-                        id: String(node.properties.variable.value),
-                        label: node.properties.variable.value as string,
-                        value: String(node.properties.variable.value),
+                        id: variableName,
+                        label: variableName,
+                        value: variableName,
                         codedata: node.codedata,
                         iconUrl,
                     };
