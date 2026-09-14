@@ -119,7 +119,6 @@ const NODE_COLOR_GROUPS = {
         "AGENT_RUN",
         "AGENT",
         "AGENTS",
-        "DURABLE_AGENT_RUN",
         "NP_FUNCTION",
         "NP_FUNCTION_CALL",
         "MODEL_PROVIDER",
@@ -239,6 +238,11 @@ export const getNodeChartColor = (nodeType: NodeKind, symbol?: string): string =
         if (BUILTIN_ACTIVITY_COLOR_GROUPS.BLUE.includes(symbol)) {
             return dark ? CHART_COLORS.BRIGHT_BLUE : CHART_COLORS.BLUE;
         }
+    }
+
+    // The durable agent's robot: bright blue in both themes tells it from the cyan agent and reads on light too.
+    if (nodeType === "DURABLE_AGENT_RUN") {
+        return CHART_COLORS.BRIGHT_BLUE;
     }
 
     // Control flow group - blue variants
