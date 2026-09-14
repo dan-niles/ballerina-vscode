@@ -102,7 +102,9 @@ function edgeLines(graph: TopologyGraph, layout: TopologyLayout, id: (nodeId: st
         const vias = layout.edgeVias[edge.id] ?? [];
         const bow = layout.edgeBows[edge.id] ?? 0;
         const shape = vias.length >= 2 && main(vias[0]) > main(vias[vias.length - 1]) ? "WRAPS" : "DETOURS";
+        const lane = layout.edgeLanes[edge.id];
         const geometry = [
+            lane === undefined ? "" : `lane ${Math.round(lane)}`,
             vias.length >= 2 ? `${shape} via ${vias.map((via) => at(via).slice(1)).join(" ")}` : vias.length ? `bend ${at(vias[0]).slice(1)}` : "",
             bow ? `bow ${bow > 0 ? "+" : ""}${bow}` : "",
         ].filter(Boolean);

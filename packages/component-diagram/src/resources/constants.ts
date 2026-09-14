@@ -92,6 +92,10 @@ export const ENTRY_HEADER_HEIGHT = 56;
 export const ENTRY_ROW_HEIGHT = 36;
 // The "+N more" row a folded card ends with.
 export const ENTRY_FOOTER_HEIGHT = 30;
+// Top to bottom a row's edge steps out of the card and drops down a lane beside it: the nearest lane this far
+// from the card's edge, one more lane per row further out.
+export const ROW_LANE_GAP = 20;
+export const ROW_LANE_PITCH = 12;
 // A card never folds below this many rows, however little canvas there is.
 export const ENTRY_MIN_ROWS = 3;
 // Top to bottom, the entry cards sit in one row across the canvas; this is the share of its height they may take

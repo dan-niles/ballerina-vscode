@@ -244,6 +244,7 @@ export function AgentTopologyDiagram(props: AgentTopologyDiagramProps) {
         linkModelsRef.current.forEach((link, edgeId) => {
             link.via = layout.edgeVias[edgeId] ?? [];
             link.bow = layout.edgeBows[edgeId] ?? 0;
+            link.lane = layout.edgeLanes[edgeId];
             link.vertical = orientation === "vertical";
         });
     }, [canvasSize, rowBudget, orientation, input.model, unfolded]);

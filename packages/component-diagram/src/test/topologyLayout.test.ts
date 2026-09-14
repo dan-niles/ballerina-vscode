@@ -33,6 +33,8 @@ import {
     ENTRY_FOOTER_HEIGHT,
     ENTRY_MIN_ROWS,
     ENTRY_ROW_HEIGHT,
+    ROW_LANE_GAP,
+    ROW_LANE_PITCH,
     TOPOLOGY_GAP_Y,
 } from "../resources/constants";
 import { defaultVisibleRows, entryCardHeight, estimateAgentCardHeight, inletCrossOffset, layoutTopology } from "../components/AgentTopologyDiagram/topologyLayout";
@@ -306,7 +308,7 @@ describe("layoutTopology", () => {
         expect(folded.cardHeights["svc"]).toBeLessThan(all.cardHeights["svc"]);
     });
 
-    it("leaves every row's edges from the card's bottom edge, spread across it, when the flow runs top to bottom", () => {
+    it("steps every row's edge out past the card's right edge to its own lane, top row farthest, when the flow runs top to bottom", () => {
         const graph = graphOf(
             [agent("a1"), agent("a2")],
             [trigger("svc", ["h1", "h2"])],
@@ -319,11 +321,20 @@ describe("layoutTopology", () => {
         const card = layout.entryPositions["svc"];
         const first = layout.edgeVias["h1->a1"][0];
         const second = layout.edgeVias["h2->a2"][0];
-        // Both leave below the card, at a third and two thirds of its width.
+        // Both drop past the card's bottom from lanes off its right edge: the top row farthest out, the bottom row
+        // nearest, and the top row bends first so the rows' runs stack in order.
+        const cardRight = card.x + ENTRY_CARD_WIDTH;
+        expect(layout.edgeLanes["h1->a1"]).toBe(cardRight + ROW_LANE_GAP + ROW_LANE_PITCH);
+        expect(layout.edgeLanes["h2->a2"]).toBe(cardRight + ROW_LANE_GAP);
+        expect(first.x).toBe(layout.edgeLanes["h1->a1"]);
+        expect(second.x).toBe(layout.edgeLanes["h2->a2"]);
         expect(first.y).toBeGreaterThan(card.y + layout.cardHeights["svc"]);
-        expect(second.y).toBeGreaterThan(card.y + layout.cardHeights["svc"]);
-        expect(first.x).toBeCloseTo(card.x + ENTRY_CARD_WIDTH / 3);
-        expect(second.x).toBeCloseTo(card.x + (2 * ENTRY_CARD_WIDTH) / 3);
+        expect(second.y).toBeGreaterThan(first.y);
+    });
+
+    it("gives a row's edge no lane left to right", () => {
+        const graph = graphOf([agent("a1")], [trigger("svc", ["h1"])], [{ id: "h1->a1", sourceId: "svc", targetId: "a1", kind: "trigger", handlerId: "h1" }]);
+        expect(layoutTopology(graph).edgeLanes).toEqual({});
     });
 
     it("leaves each row's edges from that row's own place down the card", () => {

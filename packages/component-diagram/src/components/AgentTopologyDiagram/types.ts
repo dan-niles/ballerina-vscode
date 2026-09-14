@@ -204,6 +204,8 @@ export interface TopologyLayout {
     edgeVias: Record<string, NodePosition[]>;
     // Offset across the flow, in steps, for edges that arrive at one node together; wrapped back edges are not counted.
     edgeBows: Record<string, number>;
+    // Top to bottom only: the cross position of the lane a row's edge steps out to before it drops.
+    edgeLanes: Record<string, number>;
     // How many rows each entry card was laid out with, so the widget draws exactly what the geometry assumed.
     visibleRows: Record<string, number>;
     // Where the drawing starts: past the blank part of the trigger label block.

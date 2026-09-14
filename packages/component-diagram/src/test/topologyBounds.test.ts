@@ -26,6 +26,7 @@ const layout: TopologyLayout = {
     cardHeights: { a: 112, b: 112, t1: 92, t2: 92 },
     edgeVias: { "t1->a": [{ x: 380, y: 56 }], "t2->b": [{ x: 380, y: 256 }, { x: 380, y: 400 }] },
     edgeBows: {},
+    edgeLanes: {},
     visibleRows: {},
     left: 96,
     width: 680,
