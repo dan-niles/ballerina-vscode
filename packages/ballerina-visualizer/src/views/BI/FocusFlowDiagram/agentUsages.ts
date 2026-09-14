@@ -193,7 +193,7 @@ function parentAgentUsages(model: CDModel, uuid: string): AgentUsage[] {
         .filter((connection) => connection.kind === "Agent" && connection.delegatesTo?.includes(uuid))
         .map((parent) => ({
             label: parent.symbol,
-            serviceLabel: "uses as a tool",
+            serviceLabel: "used as a tool by",
             type: "agent",
             typeLabel: "Agent",
             documentUri: parent.location.filePath,
@@ -411,7 +411,7 @@ function peerUsages(model: CDModel, uuid: string): AgentUsage[] {
         .filter((workflow) => workflow.kind === "DURABLE_AGENT" && (workflow.peers ?? []).some((peer) => peer.agentUuid === uuid))
         .map((parent) => ({
             label: parent.symbol,
-            serviceLabel: "uses as a peer",
+            serviceLabel: "used as a peer by",
             type: "agent",
             typeLabel: "Durable Agent",
             documentUri: parent.location.filePath,
