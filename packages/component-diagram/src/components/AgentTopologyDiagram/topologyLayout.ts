@@ -30,6 +30,8 @@ import {
     ENTRY_HEADER_HEIGHT,
     ENTRY_MIN_ROWS,
     ENTRY_ROW_HEIGHT,
+    ROW_LANE_GAP,
+    ROW_LANE_PITCH,
     WORKFLOW_ROW_CAP,
     WORKFLOW_TASKS_GAP,
     LAYOUT_FIT_MARGIN,
@@ -92,13 +94,21 @@ export function defaultVisibleRows(entry: TopologyEntryNode, fits: number): numb
     return Math.max(ENTRY_MIN_ROWS, Math.min(fits, wired));
 }
 
-// Where a row's port sits, across the flow, measured from the card's own cross position. Left to right the rows
-// run down the card's side, so a port sits level with its row; top to bottom they all leave the card's bottom
-// edge, so they spread evenly across its width instead.
+// Where a row's port sits down the card's side, level with its row, in either orientation.
+export function rowPortOffset(index: number): number {
+    return ENTRY_HEADER_HEIGHT + index * ENTRY_ROW_HEIGHT + ENTRY_ROW_HEIGHT / 2;
+}
+
+// How much room a card's lanes take beside it, top to bottom.
+export function rowLaneSpan(rows: number): number {
+    return ROW_LANE_GAP + (rows - 1) * ROW_LANE_PITCH;
+}
+
+// Where a row's edge leaves across the flow, measured from the card's own cross position. Left to right that is
+// the port itself, level with the row. Top to bottom every row's edge steps out past the card's right edge to
+// its own lane and drops from there: the top row farthest out, so no row's step crosses another's drop.
 export function rowCrossOffset(index: number, count: number, vertical: boolean): number {
-    return vertical
-        ? ((index + 1) / (count + 1)) * ENTRY_CARD_WIDTH
-        : ENTRY_HEADER_HEIGHT + index * ENTRY_ROW_HEIGHT + ENTRY_ROW_HEIGHT / 2;
+    return vertical ? ENTRY_CARD_WIDTH + ROW_LANE_GAP + (count - 1 - index) * ROW_LANE_PITCH : rowPortOffset(index);
 }
 
 type Adjacency = Map<string, string[]>;
@@ -265,8 +275,9 @@ function horizontalFrame(graph: TopologyGraph, cardHeights: Record<string, numbe
     return { vertical: false, crossGap: TOPOLOGY_GAP_Y, extents, main };
 }
 
-// Rows are as tall as their tallest card.
-function verticalFrame(graph: TopologyGraph, cardHeights: Record<string, number>, rank: Map<string, number>): Frame {
+// Rows are as tall as their tallest card. An entry's extent pads both sides of the card by its lane span: the
+// lanes need the room on one side, and padding the other too keeps the card, not the block, centred on its agents.
+function verticalFrame(graph: TopologyGraph, cardHeights: Record<string, number>, lanePads: Record<string, number>, rank: Map<string, number>): Frame {
     const extents: Record<string, Extent> = {};
     const rowDepth = new Map<number, number>();
     graph.agents.forEach((agent) => {
@@ -274,7 +285,7 @@ function verticalFrame(graph: TopologyGraph, cardHeights: Record<string, number>
         const r = rank.get(agent.id) ?? 1;
         rowDepth.set(r, Math.max(rowDepth.get(r) ?? 0, cardHeights[agent.id]));
     });
-    graph.entries.forEach((entry) => (extents[entry.id] = { width: ENTRY_CARD_WIDTH, height: cardHeights[entry.id] }));
+    graph.entries.forEach((entry) => (extents[entry.id] = { width: ENTRY_CARD_WIDTH + 2 * lanePads[entry.id], height: cardHeights[entry.id] }));
     const entryDepth = Math.max(0, ...graph.entries.map((entry) => cardHeights[entry.id]));
     const main = (r: number): number => {
         if (r <= 0) {
@@ -476,12 +487,14 @@ export function layoutTopology(graph: TopologyGraph, options: LayoutOptions = {}
     graph.entries.forEach((entry) => (cardHeights[entry.id] = entryCardHeight(entry, rows(entry), options.unfolded?.has(entry.id))));
     // Which row of its card a handler is, so its edges leave from that row's port and not from the card's centre.
     const rowAt = new Map<string, { index: number; count: number }>();
-    graph.entries
-        .filter((entry) => entry.kind === "service")
-        .forEach((entry) => {
-            const drawn = entry.handlers.slice(0, rows(entry));
-            drawn.forEach((handler, index) => rowAt.set(handler.id, { index, count: drawn.length }));
-        });
+    // Top to bottom a service card keeps room for its rows' lanes beside it; the card itself sits past them.
+    const vertical = options.orientation === "vertical";
+    const lanePads: Record<string, number> = {};
+    graph.entries.forEach((entry) => {
+        const drawn = entry.kind === "service" ? entry.handlers.slice(0, rows(entry)) : [];
+        drawn.forEach((handler, index) => rowAt.set(handler.id, { index, count: drawn.length }));
+        lanePads[entry.id] = vertical && drawn.length ? rowLaneSpan(drawn.length) : 0;
+    });
 
     // A card none of whose rows runs an agent has nothing to line up with, so it stays out of the ranks and is
     // stacked below the wired cards once those are placed.
@@ -492,8 +505,8 @@ export function layoutTopology(graph: TopologyGraph, options: LayoutOptions = {}
         ranks.set(r, [...(ranks.get(r) ?? []), node.id]);
     });
     const maxRank = Math.max(0, ...ranks.keys());
-    const frame = options.orientation === "vertical"
-        ? verticalFrame(graph, cardHeights, rank)
+    const frame = vertical
+        ? verticalFrame(graph, cardHeights, lanePads, rank)
         : horizontalFrame(graph, cardHeights, maxRank + 1, options.availableWidth);
     const mainOf = (id: string): number => frame.main(rank.get(id) ?? 1);
     const mainSize = (id: string): number => (frame.vertical ? frame.extents[id].height : frame.extents[id].width);
@@ -513,15 +526,22 @@ export function layoutTopology(graph: TopologyGraph, options: LayoutOptions = {}
 
     const place = (main: number, cross: number): NodePosition => (frame.vertical ? { x: cross, y: main } : { x: main, y: cross });
     const positions = new Map<string, NodePosition>();
-    final.cross.forEach((cross, id) => positions.set(id, place(mainOf(id), cross)));
+    final.cross.forEach((cross, id) => positions.set(id, place(mainOf(id), cross + (lanePads[id] ?? 0))));
 
     const offsets = bendOffsets([...ranks.values()], final);
+    const rowOf = (edge: TopologyEdge) => (edge.handlerId ? rowAt.get(edge.handlerId) : undefined);
     // A folded-away row has no port, so its edges leave the card's centre instead.
     const sourceCross = (edge: TopologyEdge): number => {
-        const row = edge.handlerId ? rowAt.get(edge.handlerId) : undefined;
+        const row = rowOf(edge);
         return row === undefined
             ? centre(edge.sourceId, final)
-            : final.cross.get(edge.sourceId) + rowCrossOffset(row.index, row.count, frame.vertical);
+            : final.cross.get(edge.sourceId) + (lanePads[edge.sourceId] ?? 0) + rowCrossOffset(row.index, row.count, frame.vertical);
+    };
+    // Top to bottom, rows bend in order down the canvas: the top row's run sits highest, so where a lower row's
+    // drop has to cross it, it crosses beside the card, not above the arrowheads.
+    const rowBend = (edge: TopologyEdge): number => {
+        const row = rowOf(edge);
+        return frame.vertical && row ? row.index * BEND_STAGGER : 0;
     };
     const sourceOf = (edge: TopologyEdge): Source => ({
         rank: rank.get(edge.sourceId),
@@ -540,8 +560,12 @@ export function layoutTopology(graph: TopologyGraph, options: LayoutOptions = {}
     const arrivalOf = (edge: TopologyEdge): number =>
         inletArrival(graph, edge, final, frame.vertical) ?? runArrival(graph, edge.targetId, final) + (edgeBows[edge.id] ?? 0) * ARRIVAL_BOW_PX;
     const vias = new Map<string, NodePosition[]>();
+    const lanes = new Map<string, number>();
     graph.edges.forEach((edge) => {
         const from = sourceOf(edge);
+        if (frame.vertical && rowOf(edge)) {
+            lanes.set(edge.id, from.centre);
+        }
         if (isBackEdge(edge)) {
             vias.set(edge.id, backEdgeVias(edge, from, frame, final, mainOf, offsets.get(edge.sourceId), arrivalOf(edge)));
             return;
@@ -551,11 +575,11 @@ export function layoutTopology(graph: TopologyGraph, options: LayoutOptions = {}
             vias.set(edge.id, longEdgeVias(from.centre, skippedBy(edge, from), lane, final, bends, place, arrivalOf(edge)));
             return;
         }
-        vias.set(edge.id, [place(from.main + offsets.get(edge.sourceId), from.centre)]);
+        vias.set(edge.id, [place(from.main + offsets.get(edge.sourceId) + rowBend(edge), from.centre)]);
     });
     const visibleRows: Record<string, number> = {};
     graph.entries.forEach((entry) => (visibleRows[entry.id] = Math.min(rows(entry), entry.handlers.length)));
-    return { ...collectLayout(graph, positions, vias, frame, cardHeights), edgeBows, visibleRows };
+    return { ...collectLayout(graph, positions, vias, lanes, frame, cardHeights, lanePads), edgeBows, visibleRows };
 }
 
 function shift(point: NodePosition, dx: number, dy: number): NodePosition {
@@ -566,8 +590,10 @@ function collectLayout(
     graph: TopologyGraph,
     positions: Map<string, NodePosition>,
     vias: Map<string, NodePosition[]>,
+    lanes: Map<string, number>,
     frame: Frame,
-    cardHeights: Record<string, number>
+    cardHeights: Record<string, number>,
+    lanePads: Record<string, number>
 ): Omit<TopologyLayout, "edgeBows" | "visibleRows"> {
     const points = [...positions.values(), ...[...vias.values()].flat()];
     const xs = points.map((point) => point.x);
@@ -578,13 +604,15 @@ function collectLayout(
     const agentPositions: Record<string, NodePosition> = {};
     const entryPositions: Record<string, NodePosition> = {};
     const edgeVias: Record<string, NodePosition[]> = {};
+    const edgeLanes: Record<string, number> = {};
     let right = 0;
     let height = 0;
     positions.forEach((position, id) => {
         const normalised = shift(position, minX, minY);
         const bucket = agentIds.has(id) ? agentPositions : entryPositions;
         bucket[id] = normalised;
-        right = Math.max(right, normalised.x + frame.extents[id].width);
+        // An entry's extent pads both sides of the card; its position already sits past the left pad.
+        right = Math.max(right, normalised.x + frame.extents[id].width - 2 * (lanePads[id] ?? 0));
         height = Math.max(height, normalised.y + frame.extents[id].height);
     });
     // A wrapped back edge is part of the drawn bounds.
@@ -595,5 +623,6 @@ function collectLayout(
             height = Math.max(height, via.y);
         });
     });
-    return { agentPositions, entryPositions, cardHeights, edgeVias, left: 0, width: right, height };
+    lanes.forEach((lane, edgeId) => (edgeLanes[edgeId] = lane - minX));
+    return { agentPositions, entryPositions, cardHeights, edgeVias, edgeLanes, left: 0, width: right, height };
 }

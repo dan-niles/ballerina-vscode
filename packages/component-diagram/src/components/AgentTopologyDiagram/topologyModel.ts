@@ -132,15 +132,11 @@ function buildToolChips(toolConnections: string[] | undefined, uuidToConnection:
     const seen = new Set<string>();
     for (const uuid of toolConnections ?? []) {
         const toolConnection = uuidToConnection.get(uuid);
-        if (!toolConnection || toolConnection.kind === MODEL_PROVIDER_KIND) {
+        if (!toolConnection || toolConnection.kind === MODEL_PROVIDER_KIND || seen.has(uuid)) {
             continue;
         }
-        const key = toolConnection.icon || toolConnection.symbol;
-        if (seen.has(key)) {
-            continue;
-        }
-        seen.add(key);
-        chips.push({ key, label: toolConnection.symbol, icon: toolConnection.icon });
+        seen.add(uuid);
+        chips.push({ key: uuid, label: toolConnection.symbol, icon: toolConnection.icon });
     }
     return chips;
 }

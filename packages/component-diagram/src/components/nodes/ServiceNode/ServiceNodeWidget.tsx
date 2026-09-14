@@ -35,7 +35,7 @@ import {
 import { useTopologyContext } from "../../AgentTopologyDiagram/TopologyContext";
 import { EntrySelection, TopologyEntryNode, TopologyHandler } from "../../AgentTopologyDiagram/types";
 import { useClickWithDragTolerance } from "../../../hooks/useClickWithDragTolerance";
-import { rowCrossOffset } from "../../AgentTopologyDiagram/topologyLayout";
+import { rowPortOffset } from "../../AgentTopologyDiagram/topologyLayout";
 import { TriggerGlyph } from "../../AgentTopologyDiagram/TriggerGlyph";
 import { colors as methodColors } from "../EntryNode/components/styles";
 
@@ -146,11 +146,19 @@ const Footer = styled.div`
     }
 `;
 
-// Left to right a port sits on the card's right edge level with its row; top to bottom every port sits on the
-// bottom edge, spread across the width. The layout offsets each row's edges by the same rule.
-const RowPort = styled(PortWidget)<{ offset: number; vertical: boolean }>`
+// A row's port sits on the card's right edge level with its row in both orientations; top to bottom the edge
+// then steps out into a lane beside the card and drops from there (rowCrossOffset).
+const RowPort = styled(PortWidget)<{ offset: number }>`
     position: absolute;
-    ${(props) => (props.vertical ? `bottom: -6px; left: ${props.offset}px;` : `right: -6px; top: ${props.offset}px;`)}
+    right: -6px;
+    top: ${(props) => props.offset}px;
+    transform: translateY(-50%);
+`;
+
+// The card's own port, for the rows folded away: level with the header left to right, the bottom edge's centre top to bottom.
+const CardPort = styled(PortWidget)<{ vertical: boolean }>`
+    position: absolute;
+    ${(props) => (props.vertical ? `bottom: -6px; left: ${ENTRY_CARD_WIDTH / 2}px;` : `right: -6px; top: ${ENTRY_HEADER_HEIGHT / 2}px;`)}
     transform: ${(props) => (props.vertical ? "translateX(-50%)" : "translateY(-50%)")};
 `;
 
@@ -343,15 +351,9 @@ export function ServiceNodeWidget(props: ServiceNodeWidgetProps) {
             {footer && <Footer onClick={() => onToggleEntry?.(entry.id)}>{footer}</Footer>}
             {isService &&
                 rows.map((handler, index) => (
-                    <RowPort
-                        key={`port-${handler.id}`}
-                        port={model.getPort(rowPortName(handler.id))!}
-                        engine={engine}
-                        offset={rowCrossOffset(index, rows.length, vertical)}
-                        vertical={vertical}
-                    />
+                    <RowPort key={`port-${handler.id}`} port={model.getPort(rowPortName(handler.id))!} engine={engine} offset={rowPortOffset(index)} />
                 ))}
-            <RowPort port={model.getOutPort()!} engine={engine} offset={vertical ? ENTRY_CARD_WIDTH / 2 : ENTRY_HEADER_HEIGHT / 2} vertical={vertical} />
+            <CardPort port={model.getOutPort()!} engine={engine} vertical={vertical} />
         </Card>
     );
 }

@@ -43,6 +43,8 @@ export class TopologyLinkModel extends DefaultLinkModel {
     via: { x: number; y: number }[] = [];
     // Ports face each other vertically when the topology is laid out top to bottom.
     vertical = false;
+    // Top to bottom, a row's edge steps sideways to this cross position before it drops; other edges drop from their port.
+    lane?: number;
 
     constructor(options: TopologyLinkModelOptions = {}) {
         super({
