@@ -1096,7 +1096,7 @@ describe("agents used as tools", () => {
         expect(rows).toEqual([
             expect.objectContaining({
                 label: "ceoAgent",
-                serviceLabel: "uses as a tool",
+                serviceLabel: "used as a tool by",
                 parentAgent: true,
                 documentUri: AGENTS_BAL,
                 position: expect.objectContaining({ startLine: 2 }),
@@ -1187,7 +1187,7 @@ describe("findDurableAgentUsages", () => {
             ["POST /conversations/[string id]/messages", "HTTP Service · /agent", "http:Service", "chat"],
             ["POST /cases/[string caseId]/submit", "HTTP Service · /agent", "http:Service", "chat"],
             ["main", "Automation", "automation", undefined],
-            ["orderAgent", "uses as a peer", "agent", undefined],
+            ["orderAgent", "used as a peer by", "agent", undefined],
         ]);
         expect(usages[1]).toMatchObject({ documentUri: SERVICES_BAL, position: { startLine: 6, startColumn: 0 }, trigger: undefined, tryIt: undefined });
         expect(usages[4].parentAgent).toBe(true);
