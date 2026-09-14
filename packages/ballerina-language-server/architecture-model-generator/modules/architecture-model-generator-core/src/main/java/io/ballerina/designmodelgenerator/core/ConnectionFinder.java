@@ -344,7 +344,7 @@ public class ConnectionFinder {
     }
 
     // A named toolkit reads by its variable or class field; an inline `new ai:McpToolKit("url")` by its server URL.
-    private static String mcpToolKitLabel(Node expr) {
+    static String mcpToolKitLabel(Node expr) {
         Node inner = expr instanceof CheckExpressionNode checkExpression ? checkExpression.expression() : expr;
         if (inner instanceof SimpleNameReferenceNode reference) {
             return reference.name().text();
