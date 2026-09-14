@@ -103,6 +103,9 @@ public class HttpAgentTriggerChannel implements AgentTriggerChannel {
 
     private static final String DEFAULT_SIGNATURE =
             "resource function post .(@http:Payload string payload) returns string|error ";
+    // A durable run is what a caller must not block on: acknowledge with the instance id.
+    private static final String DURABLE_DEFAULT_SIGNATURE =
+            "resource function post .(@http:Payload string payload) returns http:Accepted|error ";
 
     private static final String RESOURCE = """
             {{signature}}{
@@ -117,6 +120,9 @@ public class HttpAgentTriggerChannel implements AgentTriggerChannel {
     private static final String RETURN_ANSWER = "        return result;" + NEW_LINE;
 
     private static final String RETURN_ANSWER_AS_BODY = "        return {body: result};" + NEW_LINE;
+
+    private static final String RETURN_INSTANCE_ID =
+            "        return <http:Accepted>{body: {instanceId: result}};" + NEW_LINE;
 
     private static final String RETURN_ANSWER_UNMAPPED =
             "        // TODO: map the agent's result to the declared response type and return it" + NEW_LINE
@@ -364,13 +370,17 @@ public class HttpAgentTriggerChannel implements AgentTriggerChannel {
                 context.auxiliaryImports(), true);
         context.auxiliaryTypes().addAll(newTypeDefinitions);
         String header = "resource function " + accessor(shaped) + SPACE + resourcePath(shaped) + signature;
-        Answer answer = answer(shaped);
+        // A durable run yields the instance id, a string, whatever the resource declares it answers with.
+        Answer answer = context.isDurable() ? Answer.text(answer(shaped).wrapped()) : answer(shaped);
         return body(context, header, answer, promptParameters(shaped));
     }
 
     private static String defaultResource(AgentTriggerContext context) {
-        return body(context, DEFAULT_SIGNATURE, Answer.text(false),
-                List.of(new HandlerParameter(STRING_TYPE, DEFAULT_PAYLOAD_NAME, true)));
+        List<HandlerParameter> parameters = List.of(new HandlerParameter(STRING_TYPE, DEFAULT_PAYLOAD_NAME, true));
+        if (context.isDurable()) {
+            return body(context, DURABLE_DEFAULT_SIGNATURE, Answer.instanceId(), parameters);
+        }
+        return body(context, DEFAULT_SIGNATURE, Answer.text(false), parameters);
     }
 
     private static String body(AgentTriggerContext context, String header, Answer answer,
@@ -384,10 +394,18 @@ public class HttpAgentTriggerChannel implements AgentTriggerChannel {
                 .replace("{{agentRun}}", context.agentRun(promptExpression));
     }
 
-    private record Answer(String type, boolean wrapped, boolean deliverable) {
+    private record Answer(String type, boolean wrapped, boolean deliverable, boolean acknowledged) {
+
+        Answer(String type, boolean wrapped, boolean deliverable) {
+            this(type, wrapped, deliverable, false);
+        }
 
         static Answer text(boolean wrapped) {
             return new Answer(STRING_TYPE, wrapped, true);
+        }
+
+        static Answer instanceId() {
+            return new Answer(STRING_TYPE, false, true, true);
         }
 
         // `run` is dependently typed, so the declared type binds the answer — but only a subtype of `json`.
@@ -406,6 +424,9 @@ public class HttpAgentTriggerChannel implements AgentTriggerChannel {
     }
 
     private static String returnStatement(Answer answer) {
+        if (answer.acknowledged()) {
+            return RETURN_INSTANCE_ID;
+        }
         if (!answer.deliverable()) {
             return RETURN_ANSWER_UNMAPPED;
         }
