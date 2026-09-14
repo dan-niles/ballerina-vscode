@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { FunctionNode, LineRange, NodeKind, NodeProperties, NodePropertyKey, DIRECTORY_MAP, EVENT_TYPE, getPrimaryInputType, isTemplateType, RecordTypeField } from "@wso2/ballerina-core";
 import { Button, Codicon, Typography, View, ViewContent } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
@@ -26,17 +26,18 @@ import ArtifactForm from "../Forms/ArtifactForm";
 import { TitleBar } from "../../../components/TitleBar";
 import { TopNavigationBar } from "../../../components/TopNavigationBar";
 import { FormHeader } from "../../../components/FormHeader";
-import { convertConfig, getImportsForProperty } from "../../../utils/bi";
+import { convertConfig, getImportsForProperty, orderFormFields, DURABLE_AGENT_FORM_ORDER } from "../../../utils/bi";
 import { BodyText, LoadingContainer, TopBar } from "../../styles";
 import { LoadingRing } from "../../../components/Loader";
+import { useCreateNode } from "../../../components/ConnectionSelector/useCreateNode";
 
 // Default (auto-numbered) name offered by the Durable Agentic Workflow creation form.
 const DURABLE_AGENT_DEFAULT_NAME = "durableAgenticWorkflow";
 
-const FormContainer = styled.div`
+const FormContainer = styled.div<{ $fullWidth?: boolean }>`
     display: flex;
     flex-direction: column;
-    max-width: 600px;
+    max-width: ${(props: { $fullWidth?: boolean }) => props.$fullWidth ? "none" : "600px"};
     gap: 20px;
 `;
 
@@ -45,6 +46,33 @@ const Container = styled.div`
     flex-direction: "column";
     gap: 10;
 `;
+
+interface FunctionFormShellProps {
+    embedded?: boolean;
+    isPopup?: boolean;
+    projectPath: string;
+    title: string;
+    subtitle: string;
+    children: ReactNode;
+}
+
+// Inside another popup the form brings no page chrome; `View` alone would claim the full viewport height.
+function FunctionFormShell({ embedded, isPopup, projectPath, title, subtitle, children }: FunctionFormShellProps) {
+    if (embedded) {
+        return <>{children}</>;
+    }
+    return (
+        <View>
+            {!isPopup &&
+                <>
+                    <TopNavigationBar projectPath={projectPath} />
+                    <TitleBar title={title} subtitle={subtitle} />
+                </>
+            }
+            <ViewContent padding>{children}</ViewContent>
+        </View>
+    );
+}
 
 
 interface FunctionFormProps {
@@ -58,11 +86,12 @@ interface FunctionFormProps {
     isActivity?: boolean;
     isAutomation?: boolean;
     isPopup?: boolean;
+    embedded?: boolean;
 }
 
 export function FunctionForm(props: FunctionFormProps) {
     const { rpcClient } = useRpcContext();
-    const { projectPath, functionName, filePath, isDataMapper, isNpFunction, isWorkflow, isDurableAgent, isActivity, isAutomation, isPopup } = props;
+    const { projectPath, functionName, filePath, isDataMapper, isNpFunction, isWorkflow, isDurableAgent, isActivity, isAutomation, isPopup, embedded } = props;
 
     const [functionFields, setFunctionFields] = useState<FormField[]>([]);
     const [functionNode, setFunctionNode] = useState<FunctionNode>(undefined);
@@ -75,6 +104,7 @@ export function FunctionForm(props: FunctionFormProps) {
 
     const fileName = filePath.split(/[\\/]/).pop();
     const formType = useRef("Function");
+    const handleCreateNode = useCreateNode(filePath, targetLineRange);
     const isMountedRef = useRef(true);
     const functionNodeRef = useRef<FunctionNode>();
 
@@ -168,12 +198,12 @@ export function FunctionForm(props: FunctionFormProps) {
             }
         });
 
-        // Durable Agentic Workflow form. Create mode is name-only: the function template
-        // supplies the context/input parameters, and the model, instructions and
-        // capabilities are configured on the agent diagram afterwards. Edit mode
-        // additionally shows the input parameter (type + name) but still hides the Public
-        // checkbox, the return type fields, the workflow:AgenticWorkflowContext context
-        // parameter row and the Add Parameter action.
+        // Durable Agentic Workflow form. Create mode asks for the agent's identity — Name,
+        // Model, Role, Instructions and an optional Input Data Type — which is everything the
+        // declaration is generated from; its capabilities are added on the agent diagram
+        // afterwards. Edit mode additionally shows the input parameter (type + name) but still
+        // hides the Public checkbox, the return type fields, the workflow:AgenticWorkflowContext
+        // context parameter row and the Add Parameter action.
         if (isDurableAgent) {
             const isCreateMode = !functionName;
             const isContextParam = (param: Parameter) =>
@@ -202,6 +232,11 @@ export function FunctionForm(props: FunctionFormProps) {
                     }
                 }
             });
+            if (isCreateMode) {
+                // convertConfig sorts by property key, which reads as Name, Input Data Type,
+                // Instructions, Model, Role. Restore the order the fields are filled in.
+                fields = orderFormFields(fields, DURABLE_AGENT_FORM_ORDER);
+            }
         }
 
         setFunctionFields(fields);
@@ -366,26 +401,6 @@ export function FunctionForm(props: FunctionFormProps) {
         console.log("Existing Function Node: ", flowNode);
     }
 
-    // Whether the project already declares a model provider. For a durable agent this MUST be
-    // probed BEFORE the agent is generated: the agent's own source generation declares the
-    // shared WSO2 default provider when the project has none, so probing afterwards always
-    // finds one — the Config.toml write was then skipped and running the agent failed with
-    // "ballerina.ai.wso2ProviderConfig is not configured correctly".
-    const projectHasModelProvider = async (): Promise<boolean> => {
-        try {
-            const existingModelProviders = await rpcClient.getBIDiagramRpcClient().searchNodes({
-                filePath: projectPath,
-                query: { kind: "MODEL_PROVIDER" as NodeKind }
-            });
-            return (existingModelProviders?.output?.length ?? 0) > 0;
-        } catch (error) {
-            // Same failure mode as before the probe existed: skip the config write rather
-            // than prompting for sign-in on an unknown project state.
-            console.error("Failed to probe for model providers:", error);
-            return true;
-        }
-    };
-
     // Writes the WSO2 default provider's Config.toml entry (service URL + token) after an
     // agent creation that declared the provider. Failures are non-fatal: the agent is already
     // created and the provider can be configured from the agent's model circle.
@@ -502,9 +517,6 @@ export function FunctionForm(props: FunctionFormProps) {
         }
 
         console.log("Updated function node: ", functionNodeCopy);
-        // Probed before generation on purpose — the durable agent's source generation declares
-        // the default provider itself, so an after-the-fact probe always finds one.
-        const hadModelProviderBeforeSave = isDurableAgent ? await projectHasModelProvider() : true;
         const sourceCode = await rpcClient
             .getBIDiagramRpcClient()
             .getSourceCode({ filePath, flowNode: functionNodeCopy, isFunctionNodeUpdate: true });
@@ -515,7 +527,12 @@ export function FunctionForm(props: FunctionFormProps) {
         } else {
             const newArtifact = sourceCode.artifacts.find(res => res.isNew);
             if (newArtifact) {
-                if (isDurableAgent && !hadModelProviderBeforeSave) {
+                // The LS reports whether it declared the shared WSO2 default provider; that
+                // provider reads its URL and token from Config.toml, so those entries are written
+                // exactly when it was declared. Asking the project beforehand instead answered a
+                // different question — "any model provider at all" — and skipped the write for a
+                // package whose only provider was, say, an OpenAI one.
+                if (sourceCode.declaredDefaultModelProvider) {
                     await configureWso2ModelProvider();
                 }
                 if (isPopup) {
@@ -628,7 +645,7 @@ export function FunctionForm(props: FunctionFormProps) {
                 location: {
                     view: null,
                     recentIdentifier: functionName,
-                    artifactType: isDurableAgent ? DIRECTORY_MAP.DURABLE_AGENT : isWorkflow ? DIRECTORY_MAP.WORKFLOW : isActivity ? DIRECTORY_MAP.ACTIVITY : DIRECTORY_MAP.FUNCTION
+                    artifactType: isDurableAgent ? DIRECTORY_MAP.AGENT : isWorkflow ? DIRECTORY_MAP.WORKFLOW : isActivity ? DIRECTORY_MAP.ACTIVITY : DIRECTORY_MAP.FUNCTION
                 },
                 isPopup: true
             });
@@ -656,70 +673,66 @@ export function FunctionForm(props: FunctionFormProps) {
     });
 
     return (
-        <View>
-            {!isPopup &&
-                <>
-                    <TopNavigationBar projectPath={projectPath} />
-                    <TitleBar
-                        title={formType.current}
-                        subtitle={titleSubtitle}
-                    />
-                </>
-            }
-            <ViewContent padding>
-                <Container>
-                    {isPopup && (
-                        <>
-                            <TopBar>
-                                <Typography variant="h2">Create New {formType.current}</Typography>
-                                <Button appearance="icon" onClick={() => handleClosePopup()}>
-                                    <Codicon name="close" />
-                                </Button>
-                            </TopBar>
-                            <BodyText>
-                                {isDurableAgent
-                                    ? "Create a new durable workflow driven by an agentic model."
-                                    : (isWorkflow
-                                    ? "Create a new workflow process with a configurable input type."
-                                    : "Create a new function to define reusable logic.")}
-                            </BodyText>
-                        </>
-                    )}
-                    <FormHeader
-                        title={`${functionName ? 'Edit' : 'Create New'} ${formType.current}`}
-                        subtitle={formSubtitle}
-                    />
-                    {(isLoading || (saving && !functionName)) && (
-                        <LoadingContainer>
-                            <LoadingRing message={saving ? `Creating the ${formType.current.toLowerCase()}...` : undefined} />
-                        </LoadingContainer>
-                    )}
-                    {/* While a new artifact is being created the form is replaced by the loader:
-                        the source is already written, so keeping the form mounted lets the name
-                        field re-validate against the freshly created function and flash a
-                        misleading "name already used" error. */}
-                    <FormContainer>
-                        {filePath && targetLineRange && functionFields.length > 0 && !(saving && !functionName) &&
-                            <ArtifactForm
-                                fileName={filePath}
-                                nestedForm={true}
-                                targetLineRange={targetLineRange}
-                                fields={functionFields}
-                                recordTypeFields={recordTypeFields}
-                                isSaving={saving}
-                                onSubmit={handleFormSubmit}
-                                submitText={saving
-                                    ? (functionName ? "Saving..." : "Creating...")
-                                    : (functionName
-                                        ? "Save"
-                                        : (isDurableAgent ? "Create Agent" : "Create"))}
-                                selectedNode={functionNode?.codedata?.node}
-                                preserveFieldOrder={true}
-                            />
-                        }
-                    </FormContainer>
-                </Container>
-            </ViewContent>
-        </View>
+        <FunctionFormShell
+            embedded={embedded}
+            isPopup={isPopup}
+            projectPath={projectPath}
+            title={formType.current}
+            subtitle={titleSubtitle}
+        >
+            <Container>
+                {isPopup && (
+                    <>
+                        <TopBar>
+                            <Typography variant="h2">Create New {formType.current}</Typography>
+                            <Button appearance="icon" onClick={() => handleClosePopup()}>
+                                <Codicon name="close" />
+                            </Button>
+                        </TopBar>
+                        <BodyText>
+                            {isDurableAgent
+                                ? "Create a new durable workflow driven by an agentic model."
+                                : (isWorkflow
+                                ? "Create a new workflow process with a configurable input type."
+                                : "Create a new function to define reusable logic.")}
+                        </BodyText>
+                    </>
+                )}
+                <FormHeader
+                    title={embedded ? undefined : `${functionName ? 'Edit' : 'Create New'} ${formType.current}`}
+                    subtitle={formSubtitle}
+                />
+                {(isLoading || (saving && !functionName)) && (
+                    <LoadingContainer>
+                        <LoadingRing message={saving ? `Creating the ${formType.current.toLowerCase()}...` : undefined} />
+                    </LoadingContainer>
+                )}
+                {/* While a new artifact is being created the form is replaced by the loader:
+                    the source is already written, so keeping the form mounted lets the name
+                    field re-validate against the freshly created function and flash a
+                    misleading "name already used" error. */}
+                <FormContainer $fullWidth={embedded}>
+                    {filePath && targetLineRange && functionFields.length > 0 && !(saving && !functionName) &&
+                        <ArtifactForm
+                            fileName={filePath}
+                            nestedForm={true}
+                            targetLineRange={targetLineRange}
+                            fields={functionFields}
+                            recordTypeFields={recordTypeFields}
+                            isSaving={saving}
+                            onSubmit={handleFormSubmit}
+                            submitText={saving
+                                ? (functionName ? "Saving..." : "Creating...")
+                                : (functionName
+                                    ? "Save"
+                                    : (isDurableAgent ? "Create Agent" : "Create"))}
+                            selectedNode={functionNode?.codedata?.node}
+                            preserveFieldOrder={true}
+                            onCreateNode={handleCreateNode}
+                        />
+                    }
+                </FormContainer>
+            </Container>
+        </FunctionFormShell>
     );
 }

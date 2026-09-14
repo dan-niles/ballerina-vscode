@@ -27,6 +27,7 @@ import io.ballerina.servicemodelgenerator.extension.builder.service.agent.AgentT
 import io.ballerina.servicemodelgenerator.extension.builder.service.agent.HttpAgentTriggerChannel;
 import io.ballerina.servicemodelgenerator.extension.connector.SchemaDrivenSourceGenerator;
 import io.ballerina.servicemodelgenerator.extension.connector.TriggerModelReader;
+import io.ballerina.servicemodelgenerator.extension.connector.TriggerPropertiesRegistry;
 import io.ballerina.servicemodelgenerator.extension.model.Function;
 import io.ballerina.servicemodelgenerator.extension.model.FunctionReturnType;
 import io.ballerina.servicemodelgenerator.extension.model.HttpResponse;
@@ -58,24 +59,35 @@ import java.util.Map;
 public class AgentTriggerGenerationTest {
 
     private static final String AGENT_NAME_PROPERTY = "agentName";
+    private static final String AGENT_KIND_PROPERTY = "agentKind";
+    private static final Map<String, String> DURABLE = Map.of(AGENT_KIND_PROPERTY, "durable");
     private static final String SERVICE_TYPE_PROPERTY = "serviceType";
     private static final String HANDLER_PROPERTY = "agentEventHandler";
     private final Gson gson = new Gson();
 
+    /** The org publishing {@code moduleName} in the trigger picker, so tests can name a module alone. */
+    private static String orgNameOf(String moduleName) {
+        return TriggerPropertiesRegistry.getInstance().byId().values().stream()
+                .filter(property -> moduleName.equals(property.name()) || moduleName.equals(property.packageName()))
+                .map(property -> property.orgName())
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("No trigger property for " + moduleName));
+    }
+
     private ServiceInitModel initForm(String moduleName) {
-        ServiceInitModel cached = TriggerModelReader.getInstance().getBundledServiceInitModel(moduleName)
+        ServiceInitModel cached = TriggerModelReader.getInstance()
+                .getSchemaDrivenServiceInitModel(orgNameOf(moduleName), moduleName)
                 .orElseThrow();
         return gson.fromJson(gson.toJsonTree(cached), ServiceInitModel.class);
     }
 
     private TriggerUISchemaModel triggerModel(String moduleName) {
-        return TriggerModelReader.getInstance().getBundledTriggerModel(moduleName).orElseThrow();
+        return TriggerModelReader.getInstance().getSchemaDrivenTriggerModel(orgNameOf(moduleName), moduleName)
+                .orElseThrow();
     }
 
     private AgentTriggerChannel channel(String moduleName) {
-        String orgName = TriggerModelReader.getInstance().getBundledTriggerModel(moduleName)
-                .map(TriggerUISchemaModel::orgName).orElse(null);
-        return channel(orgName, moduleName);
+        return channel(orgNameOf(moduleName), moduleName);
     }
 
     private AgentTriggerChannel channel(String orgName, String moduleName) {
@@ -1248,7 +1260,7 @@ public class AgentTriggerGenerationTest {
 
     private static TriggerBasicInfo stamped(String orgName, String moduleName, String type) {
         return AgentTriggerChannels.withAgentKind(new TriggerBasicInfo(0, moduleName, orgName, moduleName,
-                moduleName, "1.0.0", type, moduleName, "", moduleName, ""));
+                moduleName, "1.0.0", type, moduleName, "", moduleName, "", type));
     }
 
     @Test
@@ -1274,5 +1286,96 @@ public class AgentTriggerGenerationTest {
                 "the event already wired must survive: " + src);
         Assert.assertEquals(src.split("service cdc:Service", -1).length - 1, 1,
                 "a second service on the same listener fails to start: " + src);
+    }
+
+    // --- Durable agents: a run starts an instance; a chat turn is an event sent into it and awaited. ---
+
+    private ServiceInitModel durableForm(String orgName, String moduleName, String basePath) {
+        AgentTriggerChannel channel = channel(orgName, moduleName);
+        ServiceInitModel form = channel.initModel(new GetServiceInitModelContext(orgName, moduleName, moduleName,
+                "1.0.0", null, null, null, false, "claimAgent", null, "durable")).orElseThrow();
+        form.addProperty(AGENT_NAME_PROPERTY, new Value.ValueBuilder()
+                .enabled(true).editable(false).value("claimAgent").build());
+        form.addProperty(AGENT_KIND_PROPERTY, new Value.ValueBuilder()
+                .enabled(true).editable(false).value("durable").build());
+        channel.additionalProperties().forEach(form::addProperty);
+        form.getProperties().get("basePath").setValue(basePath);
+        return form;
+    }
+
+    private static void assertDurableChat(String src, String turn) {
+        Assert.assertTrue(src.contains(turn), "the chat turn should go through the session's instance: " + src);
+        Assert.assertTrue(src.contains("private map<string> durableSessions = {};"),
+                "the service should keep one instance per session: " + src);
+        Assert.assertTrue(src.contains("string token = check claimAgent.sendData(instanceId, \"chat\", text);")
+                        && src.contains("return claimAgent.waitForDataResult(instanceId, token);"),
+                "a turn is a sendData on the chat channel awaited through its token: " + src);
+        Assert.assertEquals(src.split("\\.run\\(", -1).length - 1, 1, "run() starts the instance, once: " + src);
+        Assert.assertTrue(src.indexOf(".run(") > src.indexOf("function instanceFor(string sessionKey)"),
+                "the one run() belongs to instanceFor: " + src);
+        Assert.assertFalse(src.contains("sessionId ="), "DurableAgent.run takes no sessionId: " + src);
+    }
+
+    @Test
+    public void testDurableAgentChatTurnsThroughAnInstance() {
+        String src = render(AgentTriggerServiceBuilder.buildEdits(durableForm("ballerina", "ai", "/claims"), null,
+                channel("ballerina", "ai"), rootOf("\n"), "main.bal"));
+
+        assertDurableChat(src, "check self.durableTurn(request.sessionId, request.message)");
+    }
+
+    @Test
+    public void testDurableGoogleChatTurnsThroughAnInstance() {
+        String src = generateForAgent("googleapis.chat", "claimAgent", null, DURABLE);
+
+        assertDurableChat(src, "self.durableTurn(\"googlechat:\" + (event.space?.name ?: \"unknown\"), text)");
+    }
+
+    @Test
+    public void testDurableChatSendsOnTheChosenChannel() {
+        String src = generateForAgent("googleapis.chat", "claimAgent", null,
+                Map.of(AGENT_KIND_PROPERTY, "durable", "chatChannel", "support"));
+
+        Assert.assertTrue(src.contains("claimAgent.sendData(instanceId, \"support\", text)"),
+                "the form's channel name is the one each turn is sent on: " + src);
+    }
+
+    @Test
+    public void testDurableEventRunLogsTheInstanceId() {
+        String src = generateForAgent("trigger.shopify", "claimAgent", null, DURABLE);
+
+        Assert.assertTrue(src.contains("string|error result = claimAgent.run("),
+                "an event starts an instance with a plain run: " + src);
+        Assert.assertTrue(src.contains("log:printInfo(\"Agent started\", instanceId = result);"),
+                "the result of a durable run is the instance id, and the log should say so: " + src);
+        Assert.assertFalse(src.contains("durableSessions"), "an event run needs no session map: " + src);
+    }
+
+    @Test
+    public void testDurableHttpAcknowledgesWithTheInstanceId() {
+        ServiceInitModel form = durableForm("ballerina", "http", "/claims");
+        form.getProperties().get("instructions").setValue("File the claim.");
+        String src = render(AgentTriggerServiceBuilder.buildEdits(form, null, channel("ballerina", "http"),
+                rootOf("\n"), "main.bal"));
+
+        Assert.assertTrue(src.contains("returns http:Accepted|error"),
+                "a durable run is what a caller must not block on, so the endpoint acknowledges: " + src);
+        Assert.assertTrue(src.contains("return <http:Accepted>{body: {instanceId: result}};"),
+                "the acknowledgement carries the instance id: " + src);
+        Assert.assertFalse(src.contains("sessionId ="), "DurableAgent.run takes no sessionId: " + src);
+    }
+
+    @Test
+    public void testDurableChatFormAsksForTheChannel() {
+        AgentTriggerServiceBuilder builder = new AgentTriggerServiceBuilder();
+        ServiceInitModel durable = builder.getServiceInitModel(new GetServiceInitModelContext("ballerina", "ai",
+                "ai", "1.0.0", null, null, null, false, "claimAgent", null, "durable"));
+        ServiceInitModel plain = builder.getServiceInitModel(new GetServiceInitModelContext("ballerina", "ai",
+                "ai", "1.0.0", null, null, null, false, "mathTutorAgent", null));
+
+        Assert.assertEquals(durable.getProperties().get("chatChannel").getValue(), "chat",
+                "the durable form should offer the conventional channel by default");
+        Assert.assertEquals(durable.getProperties().get(AGENT_KIND_PROPERTY).getValue(), "durable");
+        Assert.assertNull(plain.getProperties().get("chatChannel"), "an AI agent's form has no channel to ask for");
     }
 }

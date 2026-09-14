@@ -18,6 +18,7 @@
 
 import React, { createRef, useCallback, useEffect, useRef, useState } from "react";
 import {
+    PRODUCT_INTEGRATOR_ISSUES_URL,
     KeyboardNavigationManager,
     MachineStateValue,
     STModification,
@@ -212,13 +213,9 @@ const MainPanel = () => {
     const navKeyRef = useRef<number>(0);
     const remountKeyRef = useRef<number>(0);
     const previousNavTargetRef = useRef<string | undefined>(undefined);
-    const agentFocusTargetRef = useRef<string | undefined>(undefined);
-    const agentFocusIdRef = useRef<number>(0);
 
     useSuppressAgentStatusOrb(viewHidesAgentStatusOrb(activeView) || !!viewError);
     useTraceAnimationBridge();
-
-    const gitIssueUrl = "https://github.com/wso2/product-integrator/issues";
 
     // Leading edge so an ordinary navigation fetches immediately; trailing kept for bursts.
     const debounceFetchContext = useCallback(
@@ -351,19 +348,7 @@ const MainPanel = () => {
                             if ((await fetchProductMode(rpcClient)) === ProductMode.AGENT_BUILDER) {
                                 const { AgentBuilderOverview } = await import("./views/BI/AgentBuilderOverview");
                                 if (isStaleNavigation()) return;
-                                const agentFocusTarget = value.documentUri && value.position
-                                    ? `${value.documentUri}::${value.position.startLine}`
-                                    : undefined;
-                                if (agentFocusTarget !== agentFocusTargetRef.current) {
-                                    agentFocusTargetRef.current = agentFocusTarget;
-                                    agentFocusIdRef.current += 1;
-                                }
-                                const agentFocus = agentFocusTarget
-                                    ? { path: value.documentUri, startLine: value.position.startLine, requestId: agentFocusIdRef.current }
-                                    : undefined;
-                                setViewComponent(
-                                    <AgentBuilderOverview projectPath={value.projectPath} agentFocus={agentFocus} />
-                                );
+                                setViewComponent(<AgentBuilderOverview projectPath={value.projectPath} />);
                                 break;
                             }
                             const { PackageOverview } = await import("./views/BI/PackageOverview");
@@ -673,6 +658,7 @@ const MainPanel = () => {
                                     isLocalRepository={value?.artifactInfo.isLocalRepository}
                                     agentName={value?.artifactInfo.agentName}
                                     agentOrgName={value?.artifactInfo.agentOrgName}
+                                    agentKind={value?.artifactInfo.agentKind}
                                 />
                             );
                             break;
@@ -840,10 +826,10 @@ const MainPanel = () => {
                         }
                         case MACHINE_VIEW.BIDurableAgentForm: {
                             const { FunctionForm } = await import("./views/BI/FunctionForm");
-                            // Durable agent declarations live in workflow.bal alongside the
+                            // Durable agent declarations live in workflows.bal alongside the
                             // workflow artifacts, not in functions.bal.
                             const workflowFile = value.documentUri
-                                ?? (await rpcClient.getVisualizerRpcClient().joinProjectPath({ segments: ['workflow.bal'] })).filePath;
+                                ?? (await rpcClient.getVisualizerRpcClient().joinProjectPath({ segments: ['workflows.bal'] })).filePath;
                             if (isStaleNavigation()) return;
                             setViewComponent(
                                 <FunctionForm
@@ -1084,7 +1070,7 @@ const MainPanel = () => {
         <>
             <Global styles={globalStyles} />
             <VisualizerContainer id="visualizer-container">
-                <ErrorBoundary goHome={handleNavigateToOverview} errorMsg="An error occurred in the visualizer" issueUrl={gitIssueUrl} ref={errorBoundaryRef} resetKeys={[viewComponent]}>
+                <ErrorBoundary goHome={handleNavigateToOverview} errorMsg="An error occurred in the visualizer" issueUrl={PRODUCT_INTEGRATOR_ISSUES_URL} ref={errorBoundaryRef} resetKeys={[viewComponent]}>
                     {/* {navActive && <NavigationBar showHome={showHome} />} */}
                     {showNavProgress && <ProgressIndicator id="visualizer-nav-progress" />}
                     {(showOverlay || modalStack.length > 0) && <Overlay />}

@@ -24,6 +24,7 @@ import { css } from "@emotion/react";
 import { DiagramEngine, PortWidget } from "@projectstorm/react-diagrams-core";
 import { DurableAgentRunNodeModel } from "./DurableAgentRunNodeModel";
 import {
+    AGENT_BOX_BOTTOM_AFFORDANCE_GAP,
     AGENT_NODE_TOOL_GAP,
     AGENT_NODE_TOOL_SECTION_GAP,
     DRAFT_NODE_BORDER_WIDTH,
@@ -44,17 +45,36 @@ import {
     NODE_TEXT_COLOR,
     NODE_WIDTH,
 } from "../../../resources/constants";
-import { Button, Icon, Item, Menu, MenuItem, getAIModuleIcon, DefaultLlmIcon } from "@wso2/ui-toolkit";
+import { Button, Icon, Item, Menu, MenuItem, ThemeColors, getAIModuleIcon, DefaultLlmIcon } from "@wso2/ui-toolkit";
 import { MoreVertIcon } from "../../../resources/icons";
 import { AgentData, FlowNode, ToolData } from "../../../utils/types";
 import NodeIcon from "../../NodeIcon";
+import { ApprovalBadge } from "../AgentWidget/ApprovalBadge";
 import ConnectorIcon from "../../ConnectorIcon";
 import { useDiagramContext } from "../../DiagramContext";
 import { DiagnosticsPopUp } from "../../DiagnosticsPopUp";
-import { nodeHasError } from "../../../utils/node";
+import { getResultVariableName, nodeHasError } from "../../../utils/node";
 import { BreakpointMenu } from "../../BreakNodeMenu/BreakNodeMenu";
-import { NodeMetadata } from "@wso2/ballerina-core";
-import ReactMarkdown from "react-markdown";
+import { AgentUsage, NodeMetadata } from "@wso2/ballerina-core";
+import { MarkdownWithTooltip } from "../AgentMarkdownTooltip";
+import { AgentReferenceRow } from "../AgentWidget/AgentReferenceRow";
+import { EdgeAddButton, UsageIcon, usageFadeIn } from "../AgentNode/AgentNodeWidget";
+import {
+    AGENT_USAGE_ROW_LIMIT,
+    AGENT_USAGE_ROW_PITCH,
+    DURABLE_SENDER_COLUMN_WIDTH,
+    DurableBoxRows,
+    DurableUsageColumn,
+    durableAgentBoxHeight,
+    durableBottomTileY,
+    durableChannelSenders,
+    durableLeftCircleTop,
+    durableRunUsages,
+    durableSlotCircleOffset,
+    durableUsageColumn,
+    durableUsageRowCount,
+    getDurableAgentUsages,
+} from "../AgentWidget/agentNodeLayout";
 
 export namespace NodeStyles {
     export const Node = styled.div<{ readOnly: boolean }>`
@@ -130,6 +150,25 @@ export namespace NodeStyles {
         svg {
             fill: ${NODE_TEXT_COLOR};
         }
+    `;
+
+    export const IconBox = styled.div`
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4px;
+        margin-right: 4px;
+    `;
+
+    export const RunBadge = styled.div`
+        position: absolute;
+        bottom: -5px;
+        right: -5px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
     `;
 
     export const Title = styled(StyledText)`
@@ -213,7 +252,7 @@ export namespace NodeStyles {
     `;
 
     export const Role = styled(MarkdownContent)`
-        color: ${LINK_COLOR};
+        color: ${ThemeColors.PRIMARY};
         font-family: "GilmerMedium";
         font-weight: bold;
         padding: 0 4px;
@@ -229,6 +268,11 @@ export namespace NodeStyles {
         }
     `;
 
+    export const Divider = styled.div`
+        width: 100%;
+        border-top: 1px dashed ${ThemeColors.OUTLINE_VARIANT};
+    `;
+
     export const RolePlaceholder = styled(Role)`
         color: ${NODE_TEXT_COLOR};
         opacity: 0.5;
@@ -242,6 +286,8 @@ export namespace NodeStyles {
         height: 100%;
         max-height: calc(100% - 5px);
         padding: 0 4px 4px;
+        -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+        mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
     `;
 
     export const InstructionsPlaceholder = styled(Instructions)`
@@ -249,11 +295,21 @@ export namespace NodeStyles {
         font-style: italic;
     `;
 
+    // Full role/instructions text shown in the hover tooltip, wrapped and scrollable since it
+    // is not subject to the node box's fixed height.
+    export const TooltipMarkdown = styled(MarkdownContent)`
+        max-width: 280px;
+        max-height: 320px;
+        overflow-y: auto;
+        white-space: normal;
+        line-height: 1.5;
+    `;
+
     export const InstructionsRow = styled.div<{ readOnly: boolean }>`
         flex: 1;
         overflow: hidden;
         align-items: flex-start;
-        margin-bottom: 6px;
+        margin-bottom: ${AGENT_BOX_BOTTOM_AFFORDANCE_GAP}px;
         cursor: ${(props: { readOnly: boolean }) => (props.readOnly ? "default" : "pointer")};
         z-index: 2;
     `;
@@ -356,27 +412,6 @@ export namespace NodeStyles {
         color: ${NODE_BG_COLOR};
         pointer-events: none;
     `;
-
-    // Pill indicator shown on the node while a capability form is open: (+ <icon> <label>).
-    export const AddingPill = styled.div`
-        position: absolute;
-        top: -38px;
-        left: 50%;
-        transform: translateX(-50%);
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 4px 12px;
-        border-radius: 14px;
-        background-color: ${NODE_BG_COLOR};
-        border: 1px solid ${NODE_BORDER_SELECTED_COLOR};
-        color: ${NODE_TEXT_COLOR};
-        font-size: 12px;
-        font-family: "GilmerMedium";
-        white-space: nowrap;
-        cursor: pointer;
-        z-index: 4;
-    `;
 }
 
 interface DurableAgentRunNodeWidgetProps {
@@ -398,7 +433,199 @@ type DurableAgentNodeMetadata = NodeMetadata & {
     peers?: ToolData[];
     agentName?: string;
     agentBox?: boolean;
+    // Filled by the visualizer from the design model: the handlers that run or send to this agent.
+    usages?: AgentUsage[];
+    // False on a repaint of the list already on screen, so the rows fade in only when they are new.
+    animateUsages?: boolean;
 };
+
+const LEFT_SVG_WIDTH = 300;
+// The left circles are drawn at cx 220 with r 22; a sender's arrow lands on this edge.
+const LEFT_CIRCLE_EDGE_X = 198;
+// The caller square spans x 246..290 in the rail's own coordinate space; its line runs to the box edge.
+const USAGE_SQUARE_X = 246;
+const USAGE_TEXT_RIGHT_X = 238;
+const USAGE_TEXT_CENTER_Y = 21;
+const USAGE_LINE_GAP = 19;
+const USAGE_ROW_STAGGER_MS = 70;
+
+const fadeIn = (delay: number | undefined) => (delay === undefined ? "" : usageFadeIn(delay));
+
+// A repaint of the list already on screen carries false; anything else, including the first paint, fades in.
+function animatesUsages(metadata: { animateUsages?: boolean } | undefined): boolean {
+    return metadata?.animateUsages !== false;
+}
+
+// A run is drawn solid, a send dotted (as the overview's event edge), a peer dashed (as its delegation edge).
+function usageDash(usage: AgentUsage): string | undefined {
+    if (usage.parentAgent) {
+        return "6 5";
+    }
+    return usage.channel ? "2 4" : undefined;
+}
+
+interface UsageRowProps {
+    usage: AgentUsage;
+    index: number;
+    boxEdgeX: number;
+    codedata: FlowNode["codedata"];
+    markerId: string;
+    // Where the arrow lands, relative to the row: a sender row bends to its circle's centre.
+    targetY?: number;
+    animationDelay?: number;
+    onOpen: (usage: AgentUsage) => void;
+}
+
+// One caller of the agent, drawn as the AI agent's rail draws it: a square, its labels, an arrow to the box or circle.
+// The fade keyframes animate transform, so they run on an inner group and leave the row's translate alone.
+function UsageRow({ usage, index, boxEdgeX, codedata, markerId, targetY = 25, animationDelay, onOpen }: UsageRowProps) {
+    const title = [usage.serviceLabel ?? usage.typeLabel, usage.label].filter(Boolean).join(" — ");
+    return (
+        <g
+            data-testid="durable-agent-usage-row"
+            transform={`translate(0, ${index * AGENT_USAGE_ROW_PITCH})`}
+            onClick={() => onOpen(usage)}
+            css={css`
+                cursor: pointer;
+                > g {
+                    ${fadeIn(animationDelay)}
+                }
+                &:hover .usage-square {
+                    stroke: ${NODE_BORDER_SELECTED_COLOR};
+                }
+                &:hover text {
+                    fill: ${NODE_BORDER_SELECTED_COLOR};
+                }
+            `}
+        >
+            <g>
+                <rect className="usage-square" x={USAGE_SQUARE_X} y="2" width="44" height="44" rx="10" fill={NODE_BG_COLOR} stroke={NODE_BORDER_COLOR} strokeWidth={1.5} />
+                <foreignObject x={USAGE_SQUARE_X + 10} y="12" width="44" height="44" fill={NODE_TEXT_COLOR} style={{ pointerEvents: "none" }}>
+                    <div className="connector-icon"><UsageIcon usage={usage} codedata={codedata} /></div>
+                </foreignObject>
+                {usage.serviceLabel && (
+                    <text x={USAGE_TEXT_RIGHT_X} y={USAGE_TEXT_CENTER_Y - USAGE_LINE_GAP / 2} textAnchor="end" fill={NODE_TEXT_COLOR} opacity={0.7} fontSize="12px" fontFamily="monospace" dominantBaseline="middle">
+                        {usage.serviceLabel.length > 32 ? `${usage.serviceLabel.slice(0, 32)}...` : usage.serviceLabel}
+                    </text>
+                )}
+                <text x={USAGE_TEXT_RIGHT_X} y={usage.serviceLabel ? USAGE_TEXT_CENTER_Y + USAGE_LINE_GAP / 2 : USAGE_TEXT_CENTER_Y} textAnchor="end" fill={NODE_TEXT_COLOR} fontSize="14px" fontFamily="GilmerRegular" dominantBaseline="middle">
+                    {usage.label.length > 20 ? `${usage.label.slice(0, 20)}...` : usage.label}
+                    <title>{title}</title>
+                </text>
+                <path d={`M ${USAGE_SQUARE_X + 45} 25 H ${USAGE_SQUARE_X + 57} V ${targetY} H ${boxEdgeX}`} fill="none" style={{ stroke: NODE_TEXT_COLOR, strokeWidth: 1.5, strokeDasharray: usageDash(usage), markerEnd: `url(#${markerId})` }} />
+            </g>
+        </g>
+    );
+}
+
+interface UsageRowsProps {
+    column: DurableUsageColumn;
+    boxEdgeX: number;
+    codedata: FlowNode["codedata"];
+    markerId: string;
+    readOnly: boolean;
+    animate: boolean;
+    onOpen: (usage: AgentUsage) => void;
+    onAddTrigger: () => void;
+}
+
+// The declaration canvas offers the tile when the page can open the trigger picker; a run() reference never does.
+function durableTriggerHost(
+    agentNode: { onAddTrigger?: (node: FlowNode) => void } | undefined,
+    isAgentReference: boolean,
+    readOnly: boolean,
+    node: FlowNode
+): { canAddTrigger: boolean; onAddTrigger: () => void } {
+    const onAddTrigger = agentNode?.onAddTrigger;
+    const offered = onAddTrigger !== undefined && !isAgentReference;
+    return {
+        canAddTrigger: offered,
+        onAddTrigger: () => {
+            if (offered && !readOnly) {
+                onAddTrigger(node);
+            }
+        },
+    };
+}
+
+// The trigger block: the visible caller rows, "+N more" for the rest, then the Add Trigger tile.
+function UsageRows({ column, boxEdgeX, codedata, markerId, readOnly, animate, onOpen, onAddTrigger }: UsageRowsProps) {
+    const stagger = (row: number) => (animate ? row * USAGE_ROW_STAGGER_MS : undefined);
+    return (
+        <>
+            {column.visible.map((usage: AgentUsage, index: number) => (
+                <UsageRow
+                    key={`${usage.documentUri}-${usage.label}-${usage.serviceLabel ?? ""}-${index}`}
+                    usage={usage}
+                    index={index}
+                    boxEdgeX={boxEdgeX}
+                    codedata={codedata}
+                    markerId={markerId}
+                    animationDelay={stagger(index)}
+                    onOpen={onOpen}
+                />
+            ))}
+            {column.hidden > 0 && (
+                <text x={USAGE_SQUARE_X + 44} y={column.visible.length * AGENT_USAGE_ROW_PITCH + 24} textAnchor="end" fill={NODE_TEXT_COLOR} opacity={0.7} fontSize="12px" fontFamily="GilmerRegular" dominantBaseline="middle" css={css`${fadeIn(stagger(column.visible.length))}`}>
+                    {`+${column.hidden} more`}
+                </text>
+            )}
+            {column.canAddTrigger && (
+                <EdgeAddButton
+                    testId="durable-agent-add-trigger"
+                    anchorX={boxEdgeX}
+                    y={column.rows * AGENT_USAGE_ROW_PITCH + 24}
+                    side="left"
+                    label="Add Trigger"
+                    title="Connect this agent to a chat channel or event source that will run it"
+                    animationDelay={stagger(column.rows)}
+                    onClick={onAddTrigger}
+                    readOnly={readOnly}
+                />
+            )}
+        </>
+    );
+}
+
+interface ChannelSendersProps {
+    senders: AgentUsage[];
+    // The circle's offset down its slot, so each row's arrow bends to the circle's centre.
+    circleOffset: number;
+    circleEdgeX: number;
+    codedata: FlowNode["codedata"];
+    markerId: string;
+    animate: boolean;
+    onOpen: (usage: AgentUsage) => void;
+}
+
+// The handlers that send on one channel, stacked beside its circle with their arrows bending into it.
+function ChannelSenders({ senders, circleOffset, circleEdgeX, codedata, markerId, animate, onOpen }: ChannelSendersProps) {
+    const visible = senders.slice(0, AGENT_USAGE_ROW_LIMIT);
+    const hidden = senders.length - visible.length;
+    const stagger = (row: number) => (animate ? row * USAGE_ROW_STAGGER_MS : undefined);
+    return (
+        <>
+            {visible.map((usage: AgentUsage, index: number) => (
+                <UsageRow
+                    key={`${usage.documentUri}-${usage.label}-${index}`}
+                    usage={usage}
+                    index={index}
+                    boxEdgeX={circleEdgeX}
+                    targetY={circleOffset + 24 - index * AGENT_USAGE_ROW_PITCH}
+                    codedata={codedata}
+                    markerId={markerId}
+                    animationDelay={stagger(index)}
+                    onOpen={onOpen}
+                />
+            ))}
+            {hidden > 0 && (
+                <text x={USAGE_SQUARE_X + 44} y={visible.length * AGENT_USAGE_ROW_PITCH + 24} textAnchor="end" fill={NODE_TEXT_COLOR} opacity={0.7} fontSize="12px" fontFamily="GilmerRegular" dominantBaseline="middle" css={css`${fadeIn(stagger(visible.length))}`}>
+                    {`+${hidden} more`}
+                </text>
+            )}
+        </>
+    );
+}
 
 type AgentCapability = ToolData & {
     lineRange?: any;
@@ -413,25 +640,77 @@ type CapabilityItem = {
 // Capabilities addable from the agent box's "+" affordances, each pinned to a fixed anchor.
 type AddableCapability = "humanTask" | "event" | "activity" | "model";
 
-// The capability add-affordances always sit at the bottom corners: people-facing
-// capabilities (human task, data event) bottom-left, the single tool/activity entry
-// bottom-right; the model configuration stays top-right. Tools and activities share
-// one list — a plain tool is just an activity, plus the project's AI tools and MCP.
+// The capability add tiles hang off the side columns under their own group — human tasks and data events on
+// the left, the single tool/activity entry on the right (a plain tool is just an activity, plus the project's
+// AI tools and MCP); only the model configuration is a floating affordance, top-right.
 const ADD_AFFORDANCES: {
     kind: AddableCapability;
     label: string;
+    title: string;
     icon: string;
-    anchor: NodeStyles.AffordanceAnchorName;
 }[] = [
-    { kind: "humanTask", label: "Add Human Task", icon: "bi-user", anchor: "bottomLeftOuter" },
-    { kind: "event", label: "Add Data Event", icon: "bi-import", anchor: "bottomLeftInner" },
-    { kind: "activity", label: "Add Tool/Activity", icon: "bi-task", anchor: "bottomRightOuter" },
-    { kind: "model", label: "Configure Model", icon: "bi-ai-model", anchor: "topRight" },
+    { kind: "humanTask", label: "Add Human Task", title: "Add a task a person decides while the agent waits", icon: "bi-user" },
+    { kind: "event", label: "Add Data Event", title: "Add a channel the agent waits on for data sent from outside", icon: "bi-import" },
+    { kind: "activity", label: "Add Tool/Activity", title: "Add an activity, tool or MCP server for this agent to call", icon: "bi-task" },
+    { kind: "model", label: "Configure Model", title: "Configure Model", icon: "bi-ai-model" },
 ];
+
+const MODEL_AFFORDANCE_ANCHOR: NodeStyles.AffordanceAnchorName = "topRight";
+
+// The model affordance floats until the declaration has a model.
+function showsModelAffordance(readOnly: boolean, nodeMetadata: DurableAgentNodeMetadata | undefined): boolean {
+    return !readOnly && !nodeMetadata?.model;
+}
+
+// Row counts for both columns: the declaration canvas adds two footer tiles on the left and one on the right.
+function durableBoxRows(triggerRows: number, leftSenders: number[], rightItems: number, showsTiles: boolean): DurableBoxRows {
+    const tile = showsTiles ? 1 : 0;
+    return { triggerRows, leftSenders, leftTiles: tile * 2, rightRows: rightItems + 1 + tile };
+}
+
+function addAffordance(kind: AddableCapability) {
+    return ADD_AFFORDANCES.find((affordance) => affordance.kind === kind);
+}
+
+function affordanceIcon(kind: AddableCapability): ReactNode {
+    return <Icon name={addAffordance(kind).icon} sx={{ width: 16, height: 16, fontSize: 16 }} />;
+}
+
+interface CapabilityAddTileProps {
+    kind: AddableCapability;
+    anchorX: number;
+    y: number;
+    side: "left" | "right";
+    // The declaration canvas offers the tiles; a run() reference draws none.
+    show: boolean;
+    readOnly: boolean;
+    onAdd: (kind: AddableCapability) => void;
+}
+
+// One add tile, drawn like the Add Trigger tile with the capability's own glyph.
+function CapabilityAddTile({ kind, anchorX, y, side, show, readOnly, onAdd }: CapabilityAddTileProps) {
+    if (!show) {
+        return null;
+    }
+    const affordance = addAffordance(kind);
+    return (
+        <EdgeAddButton
+            testId={`durable-agent-add-${kind}`}
+            anchorX={anchorX}
+            y={y}
+            side={side}
+            label={affordance.label}
+            title={affordance.title}
+            icon={affordanceIcon(kind)}
+            onClick={() => onAdd(kind)}
+            readOnly={readOnly}
+        />
+    );
+}
 
 export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps) {
     const { model, engine, onClick } = props;
-    const { onNodeSelect, goToSource, onDeleteNode, removeBreakpoint, addBreakpoint, agentNode, readOnly, selectedNodeId } =
+    const { onNodeSelect, goToSource, onDeleteNode, removeBreakpoint, addBreakpoint, agentNode, readOnly, selectedNodeId, openView } =
         useDiagramContext();
 
     const isSelected = selectedNodeId === model.node.id;
@@ -442,10 +721,10 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
     const isAgentReference = agentNode?.durableAgentReference === true;
 
     const [isBoxHovered, setIsBoxHovered] = useState(false);
+    const [isOpenAgentHovered, setIsOpenAgentHovered] = useState(false);
     const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
     const [menuButtonElement, setMenuButtonElement] = useState<HTMLElement | null>(null);
-    // While a capability form is open, addingCapability drives the pill indicator on the node.
-    const [addingCapability, setAddingCapability] = useState<AddableCapability | null>(null);
+
     const isMenuOpen = menuPos !== null;
 
     const getMenuPos = (el: HTMLElement): { top: number; left: number } => {
@@ -491,14 +770,13 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
         }
         // In a caller's flow the box is the run statement, so clicking it opens that statement's
         // form — the way every other node behaves. Jumping to the agent's own diagram stays on the
-        // button in the corner, which is the only affordance that says it navigates.
+        // "Open agent" affordance, which is the only one that says it navigates.
         onNodeClick();
     };
 
-    const onGoToAgentClick = (event: React.MouseEvent<HTMLElement | SVGSVGElement>) => {
+    const handleOpenAgent = (event: React.SyntheticEvent) => {
         event.stopPropagation();
         agentNode?.onGoToAgent?.(model.node);
-        setMenuPos(null);
     };
 
     const onNodeClick = () => {
@@ -527,50 +805,50 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
         setMenuPos(null);
     };
 
+    // Only reachable from the owner-mode box below — reference mode returns its own
+    // simplified box before any of these handlers can be wired up.
     const onModelEditClick = () => {
-        if (readOnly || isAgentReference) {
+        if (readOnly) {
             return;
         }
         agentNode?.onModelSelect?.(model.node);
         setMenuPos(null);
     };
 
-    const onConfigureAgentClick = (event: React.MouseEvent<HTMLElement | SVGSVGElement>) => {
-        if (readOnly || isAgentReference) {
-            return;
-        }
-        event.stopPropagation();
-        agentNode?.onConfigureAgent?.(model.node);
-        setMenuPos(null);
+    // Whether an activity is gated by a review before the agent may run it. The value arrives as the
+    // declared source text — `true`, or the name of a predicate function — so anything other than
+    // absent or `false` gates it, which is how the chat agent's tool badge reads it too.
+    const isApprovalGated = (item: CapabilityItem) => {
+        const declared = (item.data as any)?.values?.requiresApproval;
+        const value = typeof declared === "string" ? declared.trim() : "";
+        return value !== "" && value !== "false";
     };
 
     const onCapabilityClick = (item: CapabilityItem) => {
         if (readOnly) {
             return;
         }
-        if (isAgentReference) {
-            agentNode?.onGoToAgent?.(model.node);
+        // A tool or activity circle opens the function it registers, as the AI agent's tool circles do.
+        if (item.kind === "tool" || item.kind === "activity") {
+            const functionName = (item.data as { values?: Record<string, string> }).values?.[item.kind] ?? item.data.name;
+            agentNode?.goToTool?.({ name: functionName } as ToolData, model.node);
             return;
         }
         agentNode?.onEditCapability?.(model.node, { ...item.data, type: item.kind });
     };
 
     const onCapabilityDelete = (item: CapabilityItem) => (event: React.MouseEvent<SVGGElement>) => {
-        if (readOnly || isAgentReference) {
+        if (readOnly) {
             return;
         }
         event.stopPropagation();
         agentNode?.onDeleteCapability?.(model.node, { ...item.data, type: item.kind });
     };
 
-    // Fires the matching add callback and shows the pill; the diagram remounts the node
-    // once the generated statement lands, clearing the pill.
-    const onAffordanceClick = (kind: AddableCapability) => (event: React.MouseEvent<HTMLElement>) => {
-        if (readOnly || isAgentReference) {
+    const startAdding = (kind: AddableCapability) => {
+        if (readOnly) {
             return;
         }
-        event.stopPropagation();
-        setAddingCapability(kind);
         switch (kind) {
             case "humanTask":
                 agentNode?.onAddHumanTask?.(model.node);
@@ -602,6 +880,14 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
         setMenuPos(getMenuPos(target as HTMLElement));
     };
 
+    const disabled = model.node.suggested;
+    const isDraft = model.node.metadata?.draft === true;
+    const nodeMetadata = model?.node?.metadata?.data as DurableAgentNodeMetadata | undefined;
+    // The big agent visualization is rendered only for the synthetic agent-box node
+    // (metadata.data.agentBox) or the draft placeholder; the in-chain buildAndRun
+    // statement renders as a compact node like the other register statements.
+    const isAgentBox = nodeMetadata?.agentBox === true;
+
     const menuItems: Item[] = [
         {
             id: "edit",
@@ -610,16 +896,13 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
         },
         { id: "goToSource", label: "Source", onClick: () => onGoToSource() },
         { id: "delete", label: "Delete", onClick: () => deleteNode() },
+        ...(isAgentBox && isAgentReference && agentNode?.onGoToAgent ? [{
+            id: "goToAgent",
+            label: "Open Agent",
+            onClick: () => { agentNode.onGoToAgent!(model.node); setMenuPos(null); },
+        }] : []),
     ];
-
-    const disabled = model.node.suggested;
-    const isDraft = model.node.metadata?.draft === true;
-    const nodeMetadata = model?.node?.metadata?.data as DurableAgentNodeMetadata | undefined;
-    // The big agent visualization is rendered only for the synthetic agent-box node
-    // (metadata.data.agentBox) or the draft placeholder; the in-chain buildAndRun
-    // statement renders as a compact node like the other register statements.
-    const isAgentBox = nodeMetadata?.agentBox === true;
-    // Agent identifier (the enclosing function name) is the box title; fall back to the label.
+    // The agent identifier names the box under its kind, as the AI agent node's variable does; fall back to the label.
     const nodeTitle = nodeMetadata?.agentName || model.node.metadata?.label || "Durable Agentic Workflow";
     const hasError = nodeHasError(model.node);
     const nodeModelIconUrl = nodeMetadata?.model?.path;
@@ -635,34 +918,48 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
         ...(nodeMetadata?.peers || []).map((peer: AgentCapability): CapabilityItem => ({ data: peer, kind: "peer" })),
     ];
 
-    // Capability circles rendered on the left side: human tasks and events (arrows point into the box).
+    // Capability circles rendered on the left side: human tasks, then events (arrows point into the box).
     const leftItems: CapabilityItem[] = [
         ...(nodeMetadata?.humanTasks || []).map((humanTask: AgentCapability): CapabilityItem => ({ data: humanTask, kind: "humanTask" })),
         ...(nodeMetadata?.events || []).map((event: AgentCapability): CapabilityItem => ({ data: event, kind: "event" })),
     ];
 
-    // Row 0 is the model circle on the right (and the first left item, if any).
-    const numberOfRows = Math.max(leftItems.length, rightItems.length + 1);
-    const containerHeight =
-        NODE_HEIGHT +
-        AGENT_NODE_TOOL_SECTION_GAP +
-        AGENT_NODE_TOOL_GAP * 2 +
-        (numberOfRows - 1) * (NODE_HEIGHT + AGENT_NODE_TOOL_GAP);
+    // Triggers that run the agent take the top of the left column; the rail's labels need a wider column than the
+    // circles do. A handler that sends on a channel is drawn beside that channel's circle instead, in a column of its
+    // own further left, so the trigger block and the circles move right by its width when there is one.
+    const triggerHost = durableTriggerHost(agentNode, isAgentReference, readOnly, model.node);
+    const usages = getDurableAgentUsages(model.node);
+    const usageColumn = durableUsageColumn(durableRunUsages(usages), triggerHost.canAddTrigger);
+    const sendersOf = (item: CapabilityItem): AgentUsage[] => (item.kind === "event" ? durableChannelSenders(usages, item.data.name) : []);
+    const leftSenders = leftItems.map((item) => durableUsageRowCount(sendersOf(item)));
+    const senderShift = leftSenders.some((senderRows) => senderRows > 0) ? DURABLE_SENDER_COLUMN_WIDTH : 0;
+    const columnShift = usageColumn.shift + senderShift;
+    const leftSvgWidth = LEFT_SVG_WIDTH + columnShift;
+    const rows = durableBoxRows(usageColumn.triggerRows, leftSenders, rightItems.length, !isAgentReference);
+    const showsLeftColumn = rows.triggerRows + rows.leftSenders.length + rows.leftTiles > 0;
+
+    // The viewBox height for the side-connector SVGs; the box's rendered height is viewState.ch, set by
+    // SizingVisitor.endVisitDurableAgentRun from the same function, so the connector lines meet the box edge.
+    const containerHeight = durableAgentBoxHeight(rows);
+    const footerTileY = (indexFromBottom: number) => durableBottomTileY(containerHeight, indexFromBottom);
 
     // Vertical offset of a capability row; row 0 aligns with the model circle.
     const rowOffsetY = (row: number) =>
         row === 0 ? 0 : row * (NODE_HEIGHT + AGENT_NODE_TOOL_GAP) + AGENT_NODE_TOOL_SECTION_GAP;
 
     const sideSvgWidth = NODE_GAP_X + NODE_HEIGHT + LABEL_HEIGHT + LABEL_WIDTH + 10;
+    const openUsage = (usage: AgentUsage) => openView?.({ documentUri: usage.documentUri, position: usage.position });
 
     const renderCapabilityIcon = (item: CapabilityItem) => {
         if (item.kind === "peer") {
-            // Delegating runs another durable agent, so it is marked as the agentic workflow it is
-            // rather than as a plain tool function.
-            return <Icon name="bi-ai-agent" sx={{ fontSize: "24px" }} />;
+            // Delegating runs another durable agent, so it wears the durable robot, not a plain tool function.
+            return <NodeIcon type="DURABLE_AGENT_RUN" size={24} />;
         }
+        // The three declared capability kinds are the same things the node palette lists, so they are
+        // drawn through NodeIcon: one source for both the glyph and its colour, which is what keeps a
+        // registered activity, human task or data event reading the same here as in the palette.
         if (item.kind === "activity") {
-            return <Icon name="bi-task" sx={{ fontSize: "24px" }} />;
+            return <NodeIcon type="ACTIVITY_CALL" size={24} />;
         }
         if (item.kind === "humanTask") {
             // The clock badge marks a configured deadline: the task times out and the agent
@@ -670,7 +967,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
             const hasDeadline = !!(item.data as any)?.values?.timeout;
             return (
                 <div style={{ position: "relative", display: "flex" }}>
-                    <Icon name="bi-user" sx={{ fontSize: "24px" }} />
+                    <NodeIcon type="HUMAN_TASK" size={24} />
                     {hasDeadline && (
                         <Icon
                             name="bi-clock"
@@ -683,7 +980,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
         if (item.kind === "event") {
             // Receiver icon: data arriving from outside. (The clock badge is reserved for
             // capabilities with a configured deadline.)
-            return <Icon name="bi-import" sx={{ fontSize: "24px" }} />;
+            return <NodeIcon type="WAIT_DATA" size={24} />;
         }
         if (item.data.path) {
             return (
@@ -833,20 +1130,133 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
         );
     }
 
+    // Reference mode: capability circles and role/instructions here only ever re-did the single
+    // "go to agent" navigation (same over-inflated pattern AgentCallNode had), so the box collapses
+    // to a title/description plus one reference row. The full capability detail lives in the
+    // property panel that Edit opens.
+    if (isAgentReference) {
+        return (
+            <NodeStyles.Node data-testid="durable-agent-run-node" readOnly={readOnly}>
+                <NodeStyles.Box
+                    disabled={disabled}
+                    hovered={isBoxHovered && !isOpenAgentHovered}
+                    hasError={hasError}
+                    readOnly={readOnly}
+                    isActiveBreakpoint={isActiveBreakpoint}
+                    isSelected={isSelected}
+                    onMouseEnter={() => setIsBoxHovered(true)}
+                    onMouseLeave={() => setIsBoxHovered(false)}
+                    onClick={!readOnly ? handleOnClick : undefined}
+                    onContextMenu={!readOnly ? handleOnContextMenu : undefined}
+                    title="Configure Run"
+                >
+                    {hasBreakpoint && (
+                        <div
+                            data-testid={isActiveBreakpoint ? "breakpoint-indicator-diagram-active" : "breakpoint-indicator-diagram"}
+                            style={{
+                                position: "absolute",
+                                left: -5,
+                                width: 15,
+                                height: 15,
+                                borderRadius: "50%",
+                                backgroundColor: "red",
+                                zIndex: 2,
+                            }}
+                        />
+                    )}
+                    <NodeStyles.TopPortWidget port={model.getPort("in")!} engine={engine} />
+                    <NodeStyles.Column style={{ height: "auto", paddingBottom: "12px" }}>
+                        <NodeStyles.Row readOnly={readOnly}>
+                            <NodeStyles.IconBox onClick={handleOnClick}>
+                                <NodeIcon type={model.node.codedata.node} size={24} />
+                                <NodeStyles.RunBadge>
+                                    <Icon name="bi-play" iconSx={{ fontSize: "20px" }} sx={{ color: "var(--vscode-charts-green)", display: "flex", justifyContent: "center", alignItems: "center" }} />
+                                </NodeStyles.RunBadge>
+                            </NodeStyles.IconBox>
+                            <NodeStyles.Row readOnly={readOnly}>
+                                <NodeStyles.Header onClick={handleOnClick}>
+                                    <NodeStyles.Title>durable agent : run</NodeStyles.Title>
+                                    <NodeStyles.Description>
+                                        {getResultVariableName(model.node)}
+                                    </NodeStyles.Description>
+                                </NodeStyles.Header>
+                                <NodeStyles.ActionButtonGroup>
+                                    {hasError && <DiagnosticsPopUp node={model.node} engine={engine} />}
+                                    <NodeStyles.MenuButton
+                                        ref={setMenuButtonElement}
+                                        buttonSx={readOnly ? { cursor: "not-allowed" } : {}}
+                                        appearance="icon"
+                                        onClick={handleOnMenuClick}
+                                    >
+                                        <MoreVertIcon />
+                                    </NodeStyles.MenuButton>
+                                </NodeStyles.ActionButtonGroup>
+                            </NodeStyles.Row>
+                            {menuPortal}
+                        </NodeStyles.Row>
+
+                        <AgentReferenceRow
+                            label={nodeTitle}
+                            clickable={Boolean(agentNode?.onGoToAgent)}
+                            onOpen={handleOpenAgent}
+                            onButtonHoverChange={setIsOpenAgentHovered}
+                        />
+                    </NodeStyles.Column>
+                    <NodeStyles.BottomPortWidget port={model.getPort("out")!} engine={engine} />
+                </NodeStyles.Box>
+            </NodeStyles.Node>
+        );
+    }
+
     return (
         <NodeStyles.Node data-testid="durable-agent-run-node" readOnly={readOnly}>
-            {leftItems.length > 0 && (
+            {showsLeftColumn && (
                 <svg
-                    width={sideSvgWidth}
+                    width={sideSvgWidth + columnShift}
                     height={model.node.viewState?.ch}
-                    viewBox={`0 0 300 ${containerHeight}`}
+                    viewBox={`0 0 ${leftSvgWidth} ${containerHeight}`}
                     style={{ marginRight: "-10px", position: "relative", zIndex: 1 }}
                 >
-                    {/* circles for human tasks and events — dotted arrows point into the agent box */}
+                    <g transform={`translate(${senderShift}, 0)`}>
+                        <UsageRows
+                            column={usageColumn}
+                            boxEdgeX={LEFT_SVG_WIDTH + usageColumn.shift}
+                            codedata={model.node.codedata}
+                            markerId={`${model.node.id}-arrow-head-usage`}
+                            readOnly={readOnly}
+                            animate={animatesUsages(nodeMetadata)}
+                            onOpen={openUsage}
+                            onAddTrigger={triggerHost.onAddTrigger}
+                        />
+                    </g>
+                    {leftItems.map((item: CapabilityItem, index: number) => {
+                        const senders = sendersOf(item);
+                        if (senders.length === 0) {
+                            return null;
+                        }
+                        return (
+                            <g key={`senders-${item.data.name}`} transform={`translate(0, ${durableLeftCircleTop(rows, index, containerHeight)})`}>
+                                <ChannelSenders
+                                    senders={senders}
+                                    circleOffset={durableSlotCircleOffset(rows.leftSenders[index])}
+                                    circleEdgeX={columnShift + LEFT_CIRCLE_EDGE_X}
+                                    codedata={model.node.codedata}
+                                    markerId={`${model.node.id}-arrow-head-usage`}
+                                    animate={animatesUsages(nodeMetadata)}
+                                    onOpen={openUsage}
+                                />
+                            </g>
+                        );
+                    })}
+                    <CapabilityAddTile kind="humanTask" anchorX={leftSvgWidth} y={footerTileY(1)} side="left" show={!isAgentReference} readOnly={readOnly} onAdd={startAdding} />
+                    <CapabilityAddTile kind="event" anchorX={leftSvgWidth} y={footerTileY(0)} side="left" show={!isAgentReference} readOnly={readOnly} onAdd={startAdding} />
+                    {/* circles for human tasks and events under the triggers — dotted arrows point into the agent box */}
                     {leftItems.map((item: CapabilityItem, index: number) => {
                         const itemName = item.data.name;
+                        const hasSenders = rows.leftSenders[index] > 0;
+                        const top = durableLeftCircleTop(rows, index, containerHeight) + durableSlotCircleOffset(rows.leftSenders[index]);
                         return (
-                            <g key={`${item.kind}-${itemName}-${index}`} transform={`translate(0, ${rowOffsetY(index)})`}>
+                            <g key={`${item.kind}-${itemName}-${index}`} transform={`translate(${columnShift}, ${top})`}>
                                 <circle
                                     cx="220"
                                     cy="24"
@@ -879,7 +1289,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                                     <div className="connector-icon">{renderCapabilityIcon(item)}</div>
                                 </foreignObject>
 
-                                {!isAgentReference && <g
+                                <g
                                     transform="translate(236, 8)"
                                     onClick={onCapabilityDelete(item)}
                                     css={css`
@@ -893,14 +1303,15 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                                     <title>Remove</title>
                                     <circle cx="0" cy="0" r="7" fill={NODE_BG_COLOR} stroke={NODE_BORDER_COLOR} strokeWidth={1} />
                                     <text x="0" y="2.8" textAnchor="middle" fontSize="9" fill={NODE_TEXT_COLOR}>✕</text>
-                                </g>}
+                                </g>
 
+                                {/* Senders occupy the circle's left, so a channel they feed carries its name underneath. */}
                                 <text
-                                    x="190"
-                                    y="28"
-                                    textAnchor="end"
+                                    x={hasSenders ? 220 : 190}
+                                    y={hasSenders ? 58 : 28}
+                                    textAnchor={hasSenders ? "middle" : "end"}
                                     fill={NODE_TEXT_COLOR}
-                                    fontSize="14px"
+                                    fontSize={hasSenders ? "12px" : "14px"}
                                     fontFamily="GilmerRegular"
                                     dominantBaseline="middle"
                                 >
@@ -911,7 +1322,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                                 <line
                                     x1="243"
                                     y1="25"
-                                    x2="300"
+                                    x2={LEFT_SVG_WIDTH}
                                     y2="25"
                                     style={{
                                         stroke: NODE_TEXT_COLOR,
@@ -925,6 +1336,9 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                     })}
 
                     <defs>
+                        <marker id={`${model.node.id}-arrow-head-usage`} markerWidth="4" markerHeight="4" refX="3" refY="2" viewBox="0 0 4 4" orient="auto">
+                            <polygon points="0,4 0,0 4,2" fill={NODE_TEXT_COLOR}></polygon>
+                        </marker>
                         {leftItems.map((item: CapabilityItem, index: number) => (
                             <marker
                                 key={`${item.kind}-${item.data.name}-${index}`}
@@ -976,35 +1390,11 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                         </NodeStyles.Icon>
                         <NodeStyles.Row readOnly={readOnly}>
                             <NodeStyles.Header onClick={handleOnClick}>
-                                <NodeStyles.Title>{nodeTitle}</NodeStyles.Title>
-                                <NodeStyles.Description>
-                                    {model.node.properties?.variable?.value as ReactNode}
-                                </NodeStyles.Description>
+                                <NodeStyles.Title>Durable Agent</NodeStyles.Title>
+                                <NodeStyles.Description>{nodeTitle}</NodeStyles.Description>
                             </NodeStyles.Header>
                             <NodeStyles.ActionButtonGroup>
                                 {hasError && <DiagnosticsPopUp node={model.node} engine={engine} />}
-                                {isAgentReference ? (
-                                    <NodeStyles.MenuButton
-                                        appearance="icon"
-                                        onClick={onGoToAgentClick}
-                                        tooltip="Go to Agent"
-                                    >
-                                        <Icon
-                                            name="bi-arrow-outward"
-                                            sx={{ width: 16, height: 16 }}
-                                            iconSx={{ fontSize: 16 }}
-                                        />
-                                    </NodeStyles.MenuButton>
-                                ) : (
-                                    <NodeStyles.MenuButton
-                                        buttonSx={readOnly ? { cursor: "not-allowed" } : {}}
-                                        appearance="icon"
-                                        onClick={onConfigureAgentClick}
-                                        tooltip="Configure Agent Identifier"
-                                    >
-                                        <Icon name="bi-settings" sx={{ width: 16, height: 16 }} iconSx={{ fontSize: 16 }} />
-                                    </NodeStyles.MenuButton>
-                                )}
                                 <NodeStyles.MenuButton
                                     ref={setMenuButtonElement}
                                     buttonSx={readOnly ? { cursor: "not-allowed" } : {}}
@@ -1017,18 +1407,17 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                         </NodeStyles.Row>
                         {menuPortal}
                     </NodeStyles.Row>
+                    <NodeStyles.Divider />
 
                     {
                         sanitizedAgent?.role ? (
                             <NodeStyles.Row readOnly={readOnly} onClick={handleOnClick}>
-                                <NodeStyles.Role>
-                                    <ReactMarkdown
-                                        disallowedElements={['script', 'iframe', 'object', 'embed', 'link', 'style']}
-                                        unwrapDisallowed={true}
-                                    >
-                                        {sanitizedAgent?.role}
-                                    </ReactMarkdown>
-                                </NodeStyles.Role>
+                                <MarkdownWithTooltip
+                                    text={sanitizedAgent.role}
+                                    Styled={NodeStyles.Role}
+                                    TooltipStyled={NodeStyles.TooltipMarkdown}
+                                    containerSx={{ display: "block", width: "100%" }}
+                                />
                             </NodeStyles.Row>
                         ) : (
                             <NodeStyles.Row readOnly={readOnly} onClick={handleOnClick}>
@@ -1040,14 +1429,12 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                     {
                         sanitizedAgent?.instructions ? (
                             <NodeStyles.InstructionsRow readOnly={readOnly} onClick={handleOnClick}>
-                                <NodeStyles.Instructions>
-                                    <ReactMarkdown
-                                        disallowedElements={['script', 'iframe', 'object', 'embed', 'link', 'style']}
-                                        unwrapDisallowed={true}
-                                    >
-                                        {sanitizedAgent?.instructions}
-                                    </ReactMarkdown>
-                                </NodeStyles.Instructions>
+                                <MarkdownWithTooltip
+                                    text={sanitizedAgent.instructions}
+                                    Styled={NodeStyles.Instructions}
+                                    TooltipStyled={NodeStyles.TooltipMarkdown}
+                                    containerSx={{ display: "block", width: "100%", height: "100%" }}
+                                />
                             </NodeStyles.InstructionsRow>
                         ) : (
                             <NodeStyles.InstructionsRow readOnly={readOnly} onClick={handleOnClick}>
@@ -1060,39 +1447,19 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                 </NodeStyles.Column>
                 <NodeStyles.BottomPortWidget port={model.getPort("out")!} engine={engine} />
 
-                {/* Capability add-affordances at fixed anchors; the model affordance hides
-                    once the declaration has a model. */}
-                {!readOnly && !isAgentReference &&
-                    ADD_AFFORDANCES
-                        .filter((affordance) => affordance.kind !== "model" || !nodeMetadata?.model)
-                        .map((affordance) => (
-                        <NodeStyles.AffordanceButton
-                            key={affordance.kind}
-                            data-testid={`durable-agent-affordance-${affordance.kind}`}
-                            anchor={affordance.anchor}
-                            title={affordance.label}
-                            onClick={onAffordanceClick(affordance.kind)}
-                        >
-                            <Icon name={affordance.icon} sx={{ width: 16, height: 16, fontSize: 16 }} />
-                            <NodeStyles.AffordanceBadge>+</NodeStyles.AffordanceBadge>
-                        </NodeStyles.AffordanceButton>
-                    ))}
-                {addingCapability && (
-                    <NodeStyles.AddingPill
-                        data-testid="durable-agent-adding-pill"
-                        title="Dismiss"
+                {showsModelAffordance(readOnly, nodeMetadata) && (
+                    <NodeStyles.AffordanceButton
+                        data-testid="durable-agent-affordance-model"
+                        anchor={MODEL_AFFORDANCE_ANCHOR}
+                        title={addAffordance("model").label}
                         onClick={(event: React.MouseEvent<HTMLElement>) => {
                             event.stopPropagation();
-                            setAddingCapability(null);
+                            startAdding("model");
                         }}
                     >
-                        <span>+</span>
-                        <Icon
-                            name={ADD_AFFORDANCES.find((a) => a.kind === addingCapability)?.icon || "bi-plus"}
-                            sx={{ width: 14, height: 14, fontSize: 14 }}
-                        />
-                        <span>{ADD_AFFORDANCES.find((a) => a.kind === addingCapability)?.label.replace(/^Add /, "").replace(/^Configure /, "")}</span>
-                    </NodeStyles.AddingPill>
+                        {affordanceIcon("model")}
+                        <NodeStyles.AffordanceBadge>+</NodeStyles.AffordanceBadge>
+                    </NodeStyles.AffordanceButton>
                 )}
             </NodeStyles.Box>
 
@@ -1150,6 +1517,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                     />
                 </g>
 
+                <CapabilityAddTile kind="activity" anchorX={0} y={footerTileY(0)} side="right" show={!isAgentReference} readOnly={readOnly} onAdd={startAdding} />
                 {/* circles for tools and activities */}
                 {rightItems.map((item: CapabilityItem, index: number) => {
                     const itemName = item.data.name;
@@ -1190,7 +1558,26 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                                 <div className="connector-icon">{renderCapabilityIcon(item)}</div>
                             </foreignObject>
 
-                            {!isAgentReference && <g
+                            {/* The same shield the chat agent puts on a gated tool, in the same
+                                bottom-right corner it now uses — which is also the only one free
+                                here, since the remove button owns the top-right. Keyed on the
+                                declared `requiresApproval` rather than the capability kind, because a
+                                registered tool carries it too and used to render as ungated. The
+                                click mirrors the circle underneath, which a tool does not have --
+                                and neither does a read-only canvas, where the handler would be a
+                                no-op the badge still advertised with a pointer cursor. */}
+                            {isApprovalGated(item) && (
+                                <ApprovalBadge
+                                    background={NODE_BG_COLOR}
+                                    onClick={
+                                        readOnly || item.kind === "tool"
+                                            ? undefined
+                                            : () => onCapabilityClick(item)
+                                    }
+                                />
+                            )}
+
+                            <g
                                 transform="translate(96, 8)"
                                 onClick={onCapabilityDelete(item)}
                                 css={css`
@@ -1204,7 +1591,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                                 <title>Remove</title>
                                 <circle cx="0" cy="0" r="7" fill={NODE_BG_COLOR} stroke={NODE_BORDER_COLOR} strokeWidth={1} />
                                 <text x="0" y="2.8" textAnchor="middle" fontSize="9" fill={NODE_TEXT_COLOR}>✕</text>
-                            </g>}
+                            </g>
 
                             <text
                                 x="110"

@@ -21,7 +21,10 @@
         "name": "supportModel",
         "scope": "Global",
         "visibility": "module",
-        "icon": "https://bcentral-packageicons.azureedge.net/images/ballerina_ai_1.12.0.png",
+        "icon": {
+          "url": "https://bcentral-packageicons.azureedge.net/images/ballerina_ai_1.13.0.png",
+          "source": "ballerina-central"
+        },
         "module": "ai",
         "children": {}
       }
@@ -161,25 +164,6 @@
         "scope": "Global",
         "visibility": "module",
         "children": {}
-      },
-      "supportAgent": {
-        "id": "supportAgent",
-        "location": {
-          "fileName": "workflow.bal",
-          "startLine": {
-            "line": 55,
-            "offset": 0
-          },
-          "endLine": {
-            "line": 60,
-            "offset": 3
-          }
-        },
-        "type": "DURABLE_AGENT",
-        "name": "supportAgent",
-        "scope": "Global",
-        "visibility": "module",
-        "children": {}
       }
     },
     "Functions": {
@@ -198,6 +182,27 @@
         },
         "type": "FUNCTION",
         "name": "helperFunction",
+        "scope": "Global",
+        "visibility": "module",
+        "children": {}
+      }
+    },
+    "Agents": {
+      "supportAgent": {
+        "id": "supportAgent",
+        "location": {
+          "fileName": "workflow.bal",
+          "startLine": {
+            "line": 55,
+            "offset": 0
+          },
+          "endLine": {
+            "line": 60,
+            "offset": 3
+          }
+        },
+        "type": "DURABLE_AGENT",
+        "name": "supportAgent",
         "scope": "Global",
         "visibility": "module",
         "children": {}

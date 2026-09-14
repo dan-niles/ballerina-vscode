@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { AgentToolData, AvailableNode, CodeData, ConfigVariable, DIRECTORY_MAP, ELineRange, EVENT_TYPE, FlowNode, GET_DEFAULT_MODEL_PROVIDER, isAgentDeclarationNode, LinePosition, LineRange, MACHINE_VIEW, NodeKind, NodePosition, ProjectStructureArtifactResponse, Property, SearchNodesQuery, ToolParameters, VisualizerLocation } from "@wso2/ballerina-core";
+import { AgentKind, AgentToolData, AvailableNode, CodeData, ConfigVariable, DIRECTORY_MAP, ELineRange, EVENT_TYPE, FlowNode, GET_DEFAULT_MODEL_PROVIDER, isAgentDeclarationNode, LinePosition, LineRange, MACHINE_VIEW, NodeKind, NodePosition, ProjectStructureArtifactResponse, Property, SearchNodesQuery, ToolParameters, VisualizerLocation } from "@wso2/ballerina-core";
 import { BallerinaRpcClient } from "@wso2/ballerina-rpc-client";
 import { FormField } from "@wso2/ballerina-side-panel";
 import { cloneDeep } from "lodash";
@@ -398,6 +398,38 @@ export const findFlowNode = async (
     }
 };
 
+/** Scopes the search to `node`'s position so local variables and class fields resolve, not just module-level declarations. */
+export const findAgentScopedNode = async (
+    rpcClient: BallerinaRpcClient,
+    node: FlowNode,
+    kind: SearchNodesQuery["kind"],
+    name?: string,
+    fallbackFilePath?: string
+): Promise<FlowNode | undefined> => {
+    if (!name?.trim() || name.trim() === "()") {
+        return undefined;
+    }
+    const fileName = node.codedata?.lineRange?.fileName;
+    const filePath = fileName
+        ? (await rpcClient.getVisualizerRpcClient().joinProjectPath({ segments: [fileName] })).filePath
+        : fallbackFilePath;
+    const nodes = await findFlowNode(rpcClient, filePath, node.codedata?.lineRange?.startLine, {
+        kind, exactMatch: name.trim(),
+    });
+    return nodes?.[0];
+};
+
+// `fileName` may already be absolute (e.g. via ConnectionSelector's updateNodeLineRange); joining again would double the project prefix.
+export const resolveFilePath = async (
+    rpcClient: BallerinaRpcClient, fileName: string | undefined, fallback: string
+): Promise<string> => {
+    if (!fileName) return fallback;
+    if (fileName.startsWith("/") || fileName.startsWith("\\\\") || /^[a-zA-Z]:[\\/]/.test(fileName)) {
+        return fileName;
+    }
+    return (await rpcClient.getVisualizerRpcClient().joinProjectPath({ segments: [fileName] })).filePath;
+};
+
 export const findAgentNodeFromAgentCallNode = async (agentCallNode: FlowNode, rpcClient: BallerinaRpcClient) => {
     if (!agentCallNode || agentCallNode.codedata?.node !== "AGENT_CALL") {
         return null;
@@ -521,21 +553,42 @@ export const startAgentChat = (node: FlowNode, filePath: string, rpcClient: Ball
 };
 
 export const startAddAgentTrigger = (node: FlowNode, rpcClient: BallerinaRpcClient) => {
-    const properties = node.properties as Record<string, { value?: unknown }> | undefined;
-    const holder = isAgentDeclarationNode(node.codedata?.node)
-        ? properties?.variable
-        : properties?.connection;
-    const agentVarName = typeof holder?.value === "string" ? holder.value.trim() : "";
+    const agentVarName = agentVarNameOf(node);
     if (!agentVarName) {
         console.error("Cannot add an agent trigger: missing agent variable name");
         return;
     }
+    const kind = agentKindOf(node);
+    openAddAgentTrigger(rpcClient, agentVarName, kind === "durable" ? "ballerina" : node.codedata?.org, kind);
+};
+
+// The durable agent box names its agent in metadata; a declaration in `variable`; a call site in `connection`.
+export const agentVarNameOf = (node: FlowNode): string => {
+    if (agentKindOf(node) === "durable") {
+        const agentName = (node.metadata?.data as { agentName?: string } | undefined)?.agentName;
+        return typeof agentName === "string" ? agentName.trim() : "";
+    }
+    const properties = node.properties as Record<string, { value?: unknown }> | undefined;
+    const holder = isAgentDeclarationNode(node.codedata?.node) ? properties?.variable : properties?.connection;
+    return typeof holder?.value === "string" ? holder.value.trim() : "";
+};
+
+// Only a durable agent needs its kind spelled out; the org already tells `.run` from `->run` for the others.
+export const agentKindOf = (node: FlowNode): AgentKind | undefined =>
+    node.codedata?.node === "DURABLE_AGENT_RUN" ? "durable" : undefined;
+
+export const openAddAgentTrigger = (
+    rpcClient: BallerinaRpcClient,
+    agentName: string,
+    agentOrgName?: string,
+    agentKind?: AgentKind
+) => {
     void rpcClient.getVisualizerRpcClient().openView({
         type: EVENT_TYPE.OPEN_VIEW,
         isPopup: true,
         location: {
             view: MACHINE_VIEW.BIAddAgentTrigger,
-            artifactInfo: { agentName: agentVarName, agentOrgName: node.codedata?.org },
+            artifactInfo: { agentName, agentOrgName, agentKind },
         },
     });
 };

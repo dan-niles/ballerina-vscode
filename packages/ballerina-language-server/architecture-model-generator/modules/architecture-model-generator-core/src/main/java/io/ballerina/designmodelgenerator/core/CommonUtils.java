@@ -72,6 +72,7 @@ public class CommonUtils {
     private static final String MEMORY_TYPE_NAME = "Memory";
     private static final String ST_MEMORY_STORE_TYPE_NAME = "ShortTermMemoryStore";
     private static final String KNOWLEDGE_BASE_TYPE_NAME = "KnowledgeBase";
+    private static final String DATA_LOADER_TYPE_NAME = "DataLoader";
     private static final String FIXED_TYPED_AGENT_TYPE_NAME = "FixedTypedAgent";
     private static final String DEPENDENTLY_TYPED_AGENT_TYPE_NAME = "DependentlyTypedAgent";
 
@@ -301,6 +302,15 @@ public class CommonUtils {
         return classSymbol != null && hasAiTypeInclusion(classSymbol, DEPENDENTLY_TYPED_AGENT_TYPE_NAME);
     }
 
+    // ai:McpToolKit itself is a plain class matched by name and module; a user's toolkit includes ai:McpBaseToolKit.
+    public static boolean isAiMcpToolKit(TypeSymbol typeSymbol) {
+        TypeSymbol rawType = getRawType(typeSymbol);
+        boolean builtIn = rawType.nameEquals("McpToolKit") && rawType.getModule()
+                .map(module -> BALLERINA_ORG_NAME.equals(module.id().orgName()) && AI.equals(module.id().moduleName()))
+                .orElse(false);
+        return builtIn || io.ballerina.modelgenerator.commons.CommonUtils.isAiMcpBaseToolKit(rawType);
+    }
+
     public static boolean isAiMemory(Symbol symbol) {
         ClassSymbol classSymbol = getClassSymbol(symbol);
         return classSymbol != null && (hasAiTypeInclusion(classSymbol, MEMORY_TYPE_NAME));
@@ -309,6 +319,11 @@ public class CommonUtils {
     public static boolean isAiShortTermMemoryStore(Symbol symbol) {
         ClassSymbol classSymbol = getClassSymbol(symbol);
         return classSymbol != null && (hasAiTypeInclusion(classSymbol, ST_MEMORY_STORE_TYPE_NAME));
+    }
+
+    public static boolean isAiDataLoader(Symbol symbol) {
+        ClassSymbol classSymbol = getClassSymbol(symbol);
+        return classSymbol != null && hasAiTypeInclusion(classSymbol, DATA_LOADER_TYPE_NAME);
     }
 
     public static boolean isAiKnowledgeBase(Symbol symbol) {
@@ -321,7 +336,8 @@ public class CommonUtils {
 
     public static boolean isHiddenAiClass(Symbol symbol) {
         return isAgentClass(symbol) || isAiFixedTypedAgent(symbol) || isAiDependentlyTypedAgent(symbol)
-                || isAiKnowledgeBase(symbol) || isAiMemory(symbol) || isAiShortTermMemoryStore(symbol);
+                || isAiKnowledgeBase(symbol) || isAiMemory(symbol) || isAiShortTermMemoryStore(symbol)
+                || isAiDataLoader(symbol);
     }
 
     private static boolean hasAiTypeInclusion(ObjectTypeSymbol objectTypeSymbol, String includedTypeName) {
@@ -346,7 +362,21 @@ public class CommonUtils {
 
     public static ConnectionKind getConnectionKind(TypeSymbol typeSymbol) {
         String typeName = getTypeName(typeSymbol);
-        return CONNECTION_KIND_MAP.getOrDefault(typeName, ConnectionKind.CONNECTION);
+        ConnectionKind mapped = CONNECTION_KIND_MAP.get(typeName);
+        if (mapped != null) {
+            return mapped;
+        }
+        if (isAiFixedTypedAgent(typeSymbol) || isAiDependentlyTypedAgent(typeSymbol)) {
+            return ConnectionKind.AGENT;
+        }
+        // Providers outside ballerina/ai (OpenAI, Anthropic, Azure, ...) include the ai:ModelProvider type.
+        if (io.ballerina.modelgenerator.commons.CommonUtils.isAiModelProvider(typeSymbol)) {
+            return ConnectionKind.MODEL_PROVIDER;
+        }
+        if (io.ballerina.modelgenerator.commons.CommonUtils.isAiEmbeddingProvider(typeSymbol)) {
+            return ConnectionKind.EMBEDDING_PROVIDER;
+        }
+        return ConnectionKind.CONNECTION;
     }
 
     /**
