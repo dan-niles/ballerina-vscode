@@ -37,6 +37,10 @@ export function hasWorkflowArtifacts(projectStructure?: ProjectStructure): boole
     return workflows.length > 0 || agents.some((agent) => agent.moduleName === "workflow");
 }
 
+export function hasAgentArtifacts(projectStructure?: ProjectStructure): boolean {
+    return (projectStructure?.directoryMap?.[DIRECTORY_MAP.AGENT] ?? []).length > 0;
+}
+
 /**
  * Extracts deployable integration types (scopes) from project structure.
  * 
