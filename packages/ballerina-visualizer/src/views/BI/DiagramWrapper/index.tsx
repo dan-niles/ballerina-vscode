@@ -23,7 +23,6 @@ import { BIFlowDiagram } from "../FlowDiagram";
 import { BISequenceDiagram } from "../SequenceDiagram";
 import { useRpcContext } from "@wso2/ballerina-rpc-client";
 import { useProductMode, useTracingStatus } from "../../../hooks/useProductMode";
-import { TracingMenu, tracingSelectionLabel } from "../../../components/TracingControl";
 import { TopNavigationBar } from "../../../components/TopNavigationBar";
 import { TitleBar } from "../../../components/TitleBar";
 import { CodeData, DIRECTORY_MAP, EVENT_TYPE, FOCUS_FLOW_DIAGRAM_VIEW, FocusFlowDiagramView, FunctionModel, isSamePath, LineRange, ParentMetadata, ProductMode, ProjectStructureArtifactResponse, Protocol, SHARED_COMMANDS } from "@wso2/ballerina-core";
@@ -144,8 +143,7 @@ export function DiagramWrapper(param: DiagramWrapperProps) {
     const [resources, setResources] = useState<ProjectStructureArtifactResponse[]>([]);
     const [servicePosition, setServicePosition] = useState<NodePosition>();
     const [isSaving, setIsSaving] = useState(false);
-    const { tracingSelection, isToggling, selectTracingProvider } = useTracingStatus(rpcClient, projectPath);
-    const [tracingAnchor, setTracingAnchor] = useState<HTMLElement | null>(null);
+    const { isTracingEnabled, isToggling, toggleTracing } = useTracingStatus(rpcClient, projectPath);
     const productMode = useProductMode();
     const [isNarrowViewport, setIsNarrowViewport] = useState(
         typeof window !== "undefined" && window.innerWidth < TRACING_LABEL_BREAKPOINT
@@ -573,33 +571,19 @@ export function DiagramWrapper(param: DiagramWrapperProps) {
     // Calculate actions based on conditions
     const getActions = () => {
         const tracingButton = (
-            <>
-                <ActionButton
-                    appearance={tracingSelection !== "off" ? "primary" : "secondary"}
-                    onClick={(e: React.MouseEvent<HTMLElement | SVGSVGElement>) =>
-                        setTracingAnchor(e.currentTarget as HTMLElement)
-                    }
-                    disabled={isToggling}
-                    tooltip={isNarrowViewport ? `Tracing: ${tracingSelectionLabel(tracingSelection)}` : undefined}
-                >
-                    <Icon
-                        name={tracingSelection !== "off" ? "telescope" : "circle-slash"}
-                        isCodicon={true}
-                        sx={{ marginRight: 5, width: 16, height: 16, fontSize: 14 }}
-                    />
-                    {isNarrowViewport ? "Tracing" : `Tracing: ${tracingSelectionLabel(tracingSelection)}`}
-                    <Icon name="chevron-down" isCodicon={true} sx={{ marginLeft: 4, fontSize: 12 }} />
-                </ActionButton>
-                <TracingMenu
-                    tracingSelection={tracingSelection}
-                    anchorEl={tracingAnchor}
-                    onClose={() => setTracingAnchor(null)}
-                    onSelect={(selection) => {
-                        setTracingAnchor(null);
-                        selectTracingProvider(selection);
-                    }}
+            <ActionButton
+                appearance={isTracingEnabled ? "primary" : "secondary"}
+                onClick={toggleTracing}
+                disabled={isToggling}
+                tooltip={isTracingEnabled ? "Tracing is on. Click to disable." : "Tracing is off. Click to enable."}
+            >
+                <Icon
+                    name={isTracingEnabled ? "telescope" : "circle-slash"}
+                    isCodicon={true}
+                    sx={{ marginRight: 5, width: 16, height: 16, fontSize: 14 }}
                 />
-            </>
+                {isNarrowViewport ? "Tracing" : isTracingEnabled ? "Tracing: On" : "Tracing: Off"}
+            </ActionButton>
         );
 
         if (isAgent) {

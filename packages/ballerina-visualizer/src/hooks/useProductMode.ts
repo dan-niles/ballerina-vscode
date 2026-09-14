@@ -18,7 +18,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { type BallerinaRpcClient, useRpcContext } from "@wso2/ballerina-rpc-client";
-import { ProductMode, TracingProvider, assistantName, assistantTagline, shortAssistantName } from "@wso2/ballerina-core";
+import { ProductMode, assistantName, assistantTagline, shortAssistantName } from "@wso2/ballerina-core";
 
 export const AGENT_MANAGER_TRACING_PROVIDER = "amp";
 
@@ -81,25 +81,31 @@ export function useShortAssistantName(): string {
     return shortAssistantName(useProductMode());
 }
 
-/** The three mutually-exclusive tracing destinations a user can pick: off, the local IDE trace viewer, or Agent Manager. */
-export type TracingSelection = TracingProvider | "off";
-
 export interface TracingStatus {
-    tracingSelection: TracingSelection;
+    // Which provider (if either) is currently active — the local IDE trace viewer and Agent
+    // Manager are mutually exclusive, since trace_enabled.bal can only import one at a time.
+    isTracingEnabled: boolean;
+    ampTracingEnabled: boolean;
     isToggling: boolean;
-    selectTracingProvider: (selection: TracingSelection) => Promise<void>;
+    toggleTracing: () => Promise<void>;
+    setAmpTracingEnabled: (enabled: boolean) => Promise<void>;
 }
 
+// The backend's tracingStatusChanged notification supports exactly one live subscriber per
+// webview (vscode-messenger keys its handler registry by method name, so a second onNotification
+// call for the same type silently replaces the first). A page that needs both the tracing button
+// and the Agent Manager checkbox must therefore call this hook once and derive both from it,
+// rather than each control subscribing on its own.
 export function useTracingStatus(rpcClient: BallerinaRpcClient, projectPath: string): TracingStatus {
-    const [tracingSelection, setTracingSelection] = useState<TracingSelection>("off");
+    const [activeProvider, setActiveProvider] = useState<string | undefined>(undefined);
     const [isToggling, setIsToggling] = useState(false);
 
     const checkTracingStatus = useCallback(async () => {
         try {
             const status = await rpcClient.getAgentChatRpcClient().getTracingStatus({ projectPath });
-            setTracingSelection(status.enabled ? status.provider ?? "idetraceprovider" : "off");
+            setActiveProvider(status.enabled ? status.provider ?? "idetraceprovider" : undefined);
         } catch (error) {
-            setTracingSelection("off");
+            setActiveProvider(undefined);
         }
     }, [rpcClient, projectPath]);
 
@@ -113,15 +119,15 @@ export function useTracingStatus(rpcClient: BallerinaRpcClient, projectPath: str
         });
     }, [rpcClient, checkTracingStatus]);
 
-    const selectTracingProvider = useCallback(async (selection: TracingSelection) => {
-        if (isToggling || selection === tracingSelection) {
+    const setProvider = useCallback(async (provider: string | undefined) => {
+        if (isToggling) {
             return;
         }
         setIsToggling(true);
         try {
-            const commands = selection === "off"
+            const commands = provider === undefined
                 ? ["ballerina.disableTracing"]
-                : ["ballerina.enableTracing", selection === AGENT_MANAGER_TRACING_PROVIDER];
+                : ["ballerina.enableTracing", provider === AGENT_MANAGER_TRACING_PROVIDER];
             await rpcClient.getCommonRpcClient().executeCommand({ commands });
             await checkTracingStatus();
         } catch (error) {
@@ -130,9 +136,20 @@ export function useTracingStatus(rpcClient: BallerinaRpcClient, projectPath: str
         } finally {
             setIsToggling(false);
         }
-    }, [isToggling, tracingSelection, rpcClient, checkTracingStatus]);
+    }, [isToggling, rpcClient, checkTracingStatus]);
 
-    return { tracingSelection, isToggling, selectTracingProvider };
+    const isTracingEnabled = activeProvider === "idetraceprovider";
+    const ampTracingEnabled = activeProvider === AGENT_MANAGER_TRACING_PROVIDER;
+
+    const toggleTracing = useCallback(async () => {
+        await setProvider(isTracingEnabled ? undefined : "idetraceprovider");
+    }, [setProvider, isTracingEnabled]);
+
+    const setAmpTracingEnabled = useCallback(async (enabled: boolean) => {
+        await setProvider(enabled ? AGENT_MANAGER_TRACING_PROVIDER : undefined);
+    }, [setProvider]);
+
+    return { isTracingEnabled, ampTracingEnabled, isToggling, toggleTracing, setAmpTracingEnabled };
 }
 
 export function useAssistantTagline(): string {
