@@ -38,10 +38,33 @@ function handlerResolver(): (edge: TopologyEdge) => Handlers {
     };
 }
 
+// The hover key of a durable card's inlet: it lights the channel's event edges and their senders, not the card's flows.
+export function inletFocusId(nodeId: string, channel: string): string {
+    return `inlet|${nodeId}|${channel}`;
+}
+
+function focusInlet(graph: TopologyGraph, id: string): TopologyFocus | undefined {
+    const [tag, nodeId, channel] = id.split("|");
+    if (tag !== "inlet") {
+        return undefined;
+    }
+    const edges = graph.edges.filter((edge) => edge.kind === "event" && edge.targetId === nodeId && edge.channel === channel);
+    const senders = edges.flatMap((edge) => [edge.sourceId, edge.handlerId ?? edge.sourceId]);
+    return { nodes: new Set([nodeId, ...senders]), edges: new Set(edges.map((edge) => edge.id)), inlets: new Set([id]) };
+}
+
+function litInlets(graph: TopologyGraph, edges: Set<string>): Set<string> {
+    return new Set(graph.edges.filter((edge) => edge.kind === "event" && edges.has(edge.id)).map((edge) => inletFocusId(edge.targetId, edge.channel)));
+}
+
 // The flow through a node, handler by handler: upstream to the triggers whose chains reach it (through the parents
 // that delegate to it too), then downstream along those handlers' chains only, and along every delegation. A chain
 // edge that belongs to another handler running through the same card stays dark.
 export function focusAround(graph: TopologyGraph, id: string): TopologyFocus {
+    const inlet = focusInlet(graph, id);
+    if (inlet) {
+        return inlet;
+    }
     // Hovering a row lights that handler's flow; hovering the card lights every handler on it. Either way the
     // walk starts at the card, which is the node the edges leave.
     const entry = graph.entries.find((candidate) => candidate.id === id || candidate.handlers.some((handler) => handler.id === id));
@@ -102,5 +125,18 @@ export function focusAround(graph: TopologyGraph, id: string): TopologyFocus {
     });
     down(start, reached);
     reached.forEach((handlerId) => nodes.add(handlerId));
-    return { nodes, edges };
+    return { nodes, edges, inlets: litInlets(graph, edges) };
+}
+
+// The graph cut down to one lit story: its cards and its lit edges, laid out on their own when dimming the rest
+// leaves the story too small to read. Rows stay with their card; the focus keeps dimming the ones outside the story.
+export function isolateGraph(graph: TopologyGraph, focus: TopologyFocus): TopologyGraph {
+    const entries = graph.entries.filter((entry) => focus.nodes.has(entry.id));
+    return {
+        ...graph,
+        agents: graph.agents.filter((agent) => focus.nodes.has(agent.id)),
+        entries,
+        handlers: entries.flatMap((entry) => entry.handlers),
+        edges: graph.edges.filter((edge) => focus.edges.has(edge.id)),
+    };
 }

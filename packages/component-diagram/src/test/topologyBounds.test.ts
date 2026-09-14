@@ -34,19 +34,19 @@ const layout: TopologyLayout = {
 
 describe("focusBounds", () => {
     it("boxes the lit nodes and their edges' bends, leaving the rest out", () => {
-        const bounds = focusBounds(layout, { nodes: new Set(["t1", "a"]), edges: new Set(["t1->a"]) });
+        const bounds = focusBounds(layout, { nodes: new Set(["t1", "a"]), edges: new Set(["t1->a"]), inlets: new Set() });
         expect(bounds).toEqual({ left: 0, top: 0, width: 400 + AGENT_CARD_WIDTH, height: 120 });
         expect(ENTRY_CARD_WIDTH).toBeLessThan(400);
     });
 
     it("stretches to a detour's bends", () => {
-        const bounds = focusBounds(layout, { nodes: new Set(["t2", "b"]), edges: new Set(["t2->b"]) });
+        const bounds = focusBounds(layout, { nodes: new Set(["t2", "b"]), edges: new Set(["t2->b"]), inlets: new Set() });
         expect(bounds.top).toBe(200);
         expect(bounds.top + bounds.height).toBe(400);
     });
 
     it("has nothing to fit when nothing is lit", () => {
-        expect(focusBounds(layout, { nodes: new Set(), edges: new Set() })).toBeUndefined();
+        expect(focusBounds(layout, { nodes: new Set(), edges: new Set(), inlets: new Set() })).toBeUndefined();
     });
 
 });

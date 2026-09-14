@@ -34,7 +34,9 @@ export interface TopologyContextState {
     setHovered?: (id?: string) => void;
     // How many handler rows each entry card draws; the rest fold behind "Show N more".
     visibleRows?: Record<string, number>;
-    onExpandEntry?: (entryId: string) => void;
+    // Cards the user unfolded; their footer reads "Show fewer" and folds them back.
+    unfolded?: Set<string>;
+    onToggleEntry?: (entryId: string) => void;
 }
 
 export const TopologyContext = React.createContext<TopologyContextState>({

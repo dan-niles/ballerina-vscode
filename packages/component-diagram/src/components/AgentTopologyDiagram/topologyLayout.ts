@@ -20,10 +20,18 @@ import {
     AGENT_CARD_MIN_HEIGHT,
     ARRIVAL_BOW_PX,
     AGENT_CARD_WIDTH,
+    DURABLE_ARRIVAL_BOW,
+    DURABLE_RUN_PORT_OFFSET,
+    INLET_PITCH,
+    INLET_TOP_OFFSET,
+    INLET_VISIBLE_MAX,
     ENTRY_CARD_WIDTH,
     ENTRY_FOOTER_HEIGHT,
     ENTRY_HEADER_HEIGHT,
+    ENTRY_MIN_ROWS,
     ENTRY_ROW_HEIGHT,
+    WORKFLOW_ROW_CAP,
+    WORKFLOW_TASKS_GAP,
     LAYOUT_FIT_MARGIN,
     TOPOLOGY_COLUMN_GAP,
     TOPOLOGY_GAP_X,
@@ -32,7 +40,7 @@ import {
     TOPOLOGY_GAP_Y,
     TOPOLOGY_ROW_GAP,
 } from "../../resources/constants";
-import { LayoutOptions, NodePosition, TopologyEdge, TopologyEntryNode, TopologyGraph, TopologyLayout } from "./types";
+import { LayoutOptions, NodePosition, TopologyAgentNode, TopologyEdge, TopologyEntryNode, TopologyGraph, TopologyLayout } from "./types";
 
 const ORPHAN_FOOTER_HEIGHT = 26;
 const LANE_CLEARANCE = 28;
@@ -42,18 +50,46 @@ const BACK_EDGE_CLEARANCE = 24;
 const BEND_OFFSET = 40;
 const BEND_STAGGER = 14;
 
-export function estimateAgentCardHeight(orphan = false): number {
-    return AGENT_CARD_MIN_HEIGHT + (orphan ? ORPHAN_FOOTER_HEIGHT : 0);
+// A plain workflow card grows for its named human-task rows, folding past WORKFLOW_ROW_CAP into one "+N more" row.
+function workflowRowCount(taskCount: number): number {
+    return Math.min(taskCount, WORKFLOW_ROW_CAP) + (taskCount > WORKFLOW_ROW_CAP ? 1 : 0);
 }
 
-// A card's height follows the rows it draws, plus the "+N more" row when it folds the rest away.
-export function entryCardHeight(entry: TopologyEntryNode, rows: number): number {
+// The min height already budgets one bottom line (tools/capabilities + chips); a workflow's task rows and an
+// orphan's footer are the only things that grow it further.
+export function estimateAgentCardHeight(node: Pick<TopologyAgentNode, "orphan" | "kind" | "humanTasks">): number {
+    const taskRows = node.kind === "workflow" ? WORKFLOW_TASKS_GAP + workflowRowCount(node.humanTasks.length) * ENTRY_ROW_HEIGHT : 0;
+    return AGENT_CARD_MIN_HEIGHT + taskRows + (node.orphan ? ORPHAN_FOOTER_HEIGHT : 0);
+}
+
+// Which inlet a channel is drawn as: its own up to the visible limit, the "+N" pill past it.
+export function inletSlot(index: number): number {
+    return Math.min(index, INLET_VISIBLE_MAX);
+}
+
+// Where an inlet sits across the flow, measured from the card's own cross position: down the left border when
+// left to right, spread across the top edge when top to bottom. The widget places the pills by the same rule.
+export function inletCrossOffset(index: number, count: number, vertical: boolean): number {
+    const slot = inletSlot(index);
+    const slots = Math.min(count, INLET_VISIBLE_MAX + 1);
+    return vertical ? ((slot + 1) / (slots + 1)) * AGENT_CARD_WIDTH : INLET_TOP_OFFSET + slot * INLET_PITCH;
+}
+
+// A card's height follows the rows it draws, plus the footer row when it folds the rest away or was unfolded.
+export function entryCardHeight(entry: TopologyEntryNode, rows: number, unfolded = false): number {
     if (entry.kind === "automation") {
         return ENTRY_HEADER_HEIGHT;
     }
     const shown = Math.min(rows, entry.handlers.length);
-    const folded = shown < entry.handlers.length;
-    return ENTRY_HEADER_HEIGHT + shown * ENTRY_ROW_HEIGHT + (folded ? ENTRY_FOOTER_HEIGHT : 0);
+    const footer = shown < entry.handlers.length || unfolded;
+    return ENTRY_HEADER_HEIGHT + shown * ENTRY_ROW_HEIGHT + (footer ? ENTRY_FOOTER_HEIGHT : 0);
+}
+
+// How many rows a card draws until unfolded: the rows that run an agent, within what fits, never under the minimum.
+// Idle rows fill the minimum when there are too few wired ones; the rest sit behind "Show N more".
+export function defaultVisibleRows(entry: TopologyEntryNode, fits: number): number {
+    const wired = entry.handlers.filter((handler) => handler.wired).length;
+    return Math.max(ENTRY_MIN_ROWS, Math.min(fits, wired));
 }
 
 // Where a row's port sits, across the flow, measured from the card's own cross position. Left to right the rows
@@ -154,13 +190,14 @@ function computeRanks(graph: TopologyGraph, edges: TopologyEdge[]): Map<string, 
     return rank;
 }
 
-// Edges arriving at one node spread across its port side, at most ±1 step apart.
-function spreadArrivals(edges: TopologyEdge[]): Record<string, number> {
+// Edges arriving at one node spread across its port side, at most ±1 step apart; a durable card's header has
+// room for a fraction of that, so its arrivals stay above the inlets.
+function spreadArrivals(edges: TopologyEdge[], stepOf: (targetId: string) => number): Record<string, number> {
     const groups = new Map<string, TopologyEdge[]>();
     edges.forEach((edge) => groups.set(edge.targetId, [...(groups.get(edge.targetId) ?? []), edge]));
     const bows: Record<string, number> = {};
-    groups.forEach((group) => {
-        const scale = Math.min(1, 2 / Math.max(1, group.length - 1));
+    groups.forEach((group, targetId) => {
+        const scale = Math.min(1, 2 / Math.max(1, group.length - 1)) * stepOf(targetId);
         group.forEach((edge, index) => (bows[edge.id] = (index - (group.length - 1) / 2) * scale));
     });
     return bows;
@@ -177,13 +214,33 @@ interface Source {
     end: number;
 }
 
-function backEdgeVias(edge: TopologyEdge, from: Source, frame: Frame, final: Placement, mainOf: (id: string) => number, offset: number): NodePosition[] {
+function backEdgeVias(edge: TopologyEdge, from: Source, frame: Frame, final: Placement, mainOf: (id: string) => number, offset: number, arrival: number): NodePosition[] {
     const place = (main: number, cross: number): NodePosition => (frame.vertical ? { x: cross, y: main } : { x: main, y: cross });
     const target = edge.targetId;
     const start = from.main + offset;
     const finish = mainOf(target) - BEND_OFFSET;
     const clear = Math.max(from.end, final.cross.get(target) + final.sizes[target]) + BACK_EDGE_CLEARANCE;
-    return [place(start, from.centre), place(start, clear), place(finish, clear), place(finish, centre(target, final))];
+    return [place(start, from.centre), place(start, clear), place(finish, clear), place(finish, arrival)];
+}
+
+// A plain workflow node takes its run edge on the header glyph and its events on inlets, same as a durable agent.
+function isDurable(graph: TopologyGraph, id: string): boolean {
+    return graph.agents.some((agent) => agent.id === id && agent.kind !== "agent");
+}
+
+// A run lands on a durable card's header glyph, clear of its inlets; on a plain card, at its centre.
+function runArrival(graph: TopologyGraph, id: string, placement: Placement): number {
+    return isDurable(graph, id) ? placement.cross.get(id) + DURABLE_RUN_PORT_OFFSET : centre(id, placement);
+}
+
+// An event edge lands on its channel's inlet, not on the card's centre, and inlets are never bowed apart.
+function inletArrival(graph: TopologyGraph, edge: TopologyEdge, final: Placement, vertical: boolean): number | undefined {
+    if (edge.kind !== "event") {
+        return undefined;
+    }
+    const channels = graph.agents.find((agent) => agent.id === edge.targetId)?.channels ?? [];
+    const index = Math.max(0, channels.findIndex((channel) => channel.name === edge.channel));
+    return final.cross.get(edge.targetId) + inletCrossOffset(index, channels.length, vertical);
 }
 
 // Columns spread across the canvas when there is room, but never closer than the default gap
@@ -240,8 +297,8 @@ function centre(id: string, placement: Placement): number {
     return placement.cross.get(id) + placement.sizes[id] / 2;
 }
 
-function stack(ids: string[], placement: Placement): void {
-    let cursor = 0;
+function stack(ids: string[], placement: Placement, start = 0): void {
+    let cursor = start;
     ids.forEach((id) => {
         placement.cross.set(id, cursor);
         cursor += placement.sizes[id] + placement.gap;
@@ -414,9 +471,9 @@ export function layoutTopology(graph: TopologyGraph, options: LayoutOptions = {}
     const rank = computeRanks(graph, graph.edges);
 
     const cardHeights: Record<string, number> = {};
-    graph.agents.forEach((agent) => (cardHeights[agent.id] = estimateAgentCardHeight(agent.orphan)));
+    graph.agents.forEach((agent) => (cardHeights[agent.id] = estimateAgentCardHeight(agent)));
     const rows = (entry: TopologyEntryNode): number => options.visibleRows?.[entry.id] ?? entry.handlers.length;
-    graph.entries.forEach((entry) => (cardHeights[entry.id] = entryCardHeight(entry, rows(entry))));
+    graph.entries.forEach((entry) => (cardHeights[entry.id] = entryCardHeight(entry, rows(entry), options.unfolded?.has(entry.id))));
     // Which row of its card a handler is, so its edges leave from that row's port and not from the card's centre.
     const rowAt = new Map<string, { index: number; count: number }>();
     graph.entries
@@ -426,8 +483,11 @@ export function layoutTopology(graph: TopologyGraph, options: LayoutOptions = {}
             drawn.forEach((handler, index) => rowAt.set(handler.id, { index, count: drawn.length }));
         });
 
+    // A card none of whose rows runs an agent has nothing to line up with, so it stays out of the ranks and is
+    // stacked below the wired cards once those are placed.
+    const idle = new Set(graph.entries.filter((entry) => !entry.handlers.some((handler) => handler.wired)).map((entry) => entry.id));
     const ranks = new Map<number, string[]>();
-    [...graph.entries, ...graph.agents].forEach((node) => {
+    [...graph.entries.filter((entry) => !idle.has(entry.id)), ...graph.agents].forEach((node) => {
         const r = rank.get(node.id) ?? 1;
         ranks.set(r, [...(ranks.get(r) ?? []), node.id]);
     });
@@ -447,6 +507,9 @@ export function layoutTopology(graph: TopologyGraph, options: LayoutOptions = {}
         placeRank(ranks.get(r) ?? [], children, provisional, final);
     }
     straightenUnderParents(ranks, primaryParents(graph, rank), final);
+    const wiredEntries = ranks.get(0) ?? [];
+    const below = wiredEntries.length ? Math.max(...wiredEntries.map((id) => final.cross.get(id) + final.sizes[id])) + final.gap : 0;
+    stack([...idle], final, below);
 
     const place = (main: number, cross: number): NodePosition => (frame.vertical ? { x: cross, y: main } : { x: main, y: cross });
     const positions = new Map<string, NodePosition>();
@@ -470,18 +533,22 @@ export function layoutTopology(graph: TopologyGraph, options: LayoutOptions = {}
     const skippedBy = (edge: TopologyEdge, from: Source): string[] =>
         [...ranks.entries()].filter(([r]) => r > from.rank && r < rank.get(edge.targetId)).flatMap(([, ids]) => ids);
     const lane = { count: 0 };
-    const edgeBows = spreadArrivals(graph.edges.filter((edge) => !isBackEdge(edge)));
+    const edgeBows = spreadArrivals(
+        graph.edges.filter((edge) => !isBackEdge(edge) && edge.kind !== "event"),
+        (targetId) => (isDurable(graph, targetId) ? DURABLE_ARRIVAL_BOW : 1)
+    );
+    const arrivalOf = (edge: TopologyEdge): number =>
+        inletArrival(graph, edge, final, frame.vertical) ?? runArrival(graph, edge.targetId, final) + (edgeBows[edge.id] ?? 0) * ARRIVAL_BOW_PX;
     const vias = new Map<string, NodePosition[]>();
     graph.edges.forEach((edge) => {
         const from = sourceOf(edge);
         if (isBackEdge(edge)) {
-            vias.set(edge.id, backEdgeVias(edge, from, frame, final, mainOf, offsets.get(edge.sourceId)));
+            vias.set(edge.id, backEdgeVias(edge, from, frame, final, mainOf, offsets.get(edge.sourceId), arrivalOf(edge)));
             return;
         }
         if (rank.get(edge.targetId) - from.rank > 1) {
             const bends = { first: frame.main(from.rank + 1) - LANE_LEAD, last: mainOf(edge.targetId) - BEND_OFFSET };
-            const arrival = centre(edge.targetId, final) + (edgeBows[edge.id] ?? 0) * ARRIVAL_BOW_PX;
-            vias.set(edge.id, longEdgeVias(from.centre, skippedBy(edge, from), lane, final, bends, place, arrival));
+            vias.set(edge.id, longEdgeVias(from.centre, skippedBy(edge, from), lane, final, bends, place, arrivalOf(edge)));
             return;
         }
         vias.set(edge.id, [place(from.main + offsets.get(edge.sourceId), from.centre)]);

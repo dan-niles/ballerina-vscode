@@ -25,6 +25,8 @@ export interface TopologyAgentArtifact {
     startLine: number;
     moduleName?: string;
     isDefinition: boolean;
+    // A workflow:DurableAgent declaration (moduleName "workflow"), drawn from CDModel.workflows rather than connections.
+    kind?: "durable";
 }
 
 export interface TopologyInput {
@@ -39,7 +41,8 @@ export interface ToolChip {
     icon?: string;
 }
 
-export type TopologyEdgeKind = "trigger" | "delegation";
+// trigger = runs the agent; event = sends on one of a durable agent's channels; delegation = agent to agent.
+export type TopologyEdgeKind = "trigger" | "event" | "delegation";
 
 // The constructs around a handler's agent calls. The overview does not draw them -- an edge is a fact about a
 // handler and an agent, while a branch or a loop is a fact about one call site -- so the handler wears them as a
@@ -62,6 +65,11 @@ export interface TopologyEdge {
     // Which row of its source's card the edge leaves from, when the source is a service.
     handlerId?: string;
     handlers?: HandlerStep[];
+    // The channel an event edge arrives on: its inlet on the durable card.
+    channel?: string;
+    // A delegation declared with requiresApproval: the hand-off parks on a person, the roles that release it.
+    gated?: boolean;
+    gatedBy?: string[];
 }
 
 export interface TopologyModelProvider {
@@ -75,16 +83,38 @@ export interface TopologyMemoryStore {
     type: string;
 }
 
-// A tool the agent can call: a plain function, or a function that hands the request to another agent.
+// A tool the agent can call: a plain function, a function that hands the request to another agent, an MCP toolkit,
+// or a durable agent's activity.
 export interface TopologyTool {
     name: string;
-    kind: "function" | "agent" | "mcp";
+    kind: "function" | "agent" | "mcp" | "activity";
+}
+
+// A durable agent's declared event channel, drawn as an inlet on the card's border.
+export interface TopologyChannel {
+    name: string;
+    request?: string;
+    response?: string;
+    cardinality?: string;
+    // Labels of the handlers that send on this channel, filled once the edges are built.
+    senders: string[];
+}
+
+// Who a durable agent stops for: a role that decides a human task, or one that releases a gated call.
+export interface TopologyRole {
+    role: string;
+    // True when the role releases a gated activity or hand-off (drawn with the lock).
+    gate: boolean;
+    decides: string[];
+    releases: string[];
 }
 
 export interface TopologyAgentNode {
     id: string;
     name: string;
-    // What the eyebrow says: "AI Agent", or the definition's name for a typed agent.
+    // "workflow" is a plain @workflow:Workflow function: run like a durable agent, but with none of its fields.
+    kind: "agent" | "durable" | "workflow";
+    // What the eyebrow says: "AI Agent", the definition's name for a typed agent, "Durable Agent".
     typeName: string;
     role: string;
     toolCount: number;
@@ -100,6 +130,13 @@ export interface TopologyAgentNode {
     filePath: string;
     position: LinePosition;
     moduleName?: string;
+    // Durable-agent capabilities; empty and zero on a plain agent.
+    channels: TopologyChannel[];
+    people: TopologyRole[];
+    activities: number;
+    gatedActivities: number;
+    humanTasks: string[];
+    peers: string[];
 }
 
 // One handler: a resource, a remote function, or an automation's main. It owns the edges to the agents it runs,
@@ -118,6 +155,10 @@ export interface TopologyHandler {
     logic: HandlerLogic[];
     // Whether this handler's agents are drawn as a chain (order known) or as a fan (order not drawn).
     ordered: boolean;
+    // Channels the handler sends events on; the edge into the inlet names them on the canvas, the dump lists them here.
+    sends?: string[];
+    // True when the handler runs or sends to an agent. An idle handler is still a row, so the card shows the whole service.
+    wired: boolean;
 }
 
 // What the canvas draws in the entry column: one card per service holding its handlers as rows, and one square
@@ -138,7 +179,7 @@ export interface TopologyEntryNode {
     handlers: TopologyHandler[];
 }
 
-export type LegendKind = "trigger" | "delegation";
+export type LegendKind = "trigger" | "event" | "delegation" | "gate" | "people";
 
 export interface TopologyGraph {
     agents: TopologyAgentNode[];
@@ -175,6 +216,8 @@ export interface TopologyLayout {
 export interface TopologyFocus {
     nodes: Set<string>;
     edges: Set<string>;
+    // Inlets (`inletFocusId` keys) whose channel receives one of the lit event edges; the rest of a lit card's pills dim.
+    inlets: Set<string>;
 }
 
 // Horizontal ranks left to right (triggers in the first column); vertical ranks top to bottom.
@@ -186,6 +229,8 @@ export interface LayoutOptions {
     orientation?: TopologyOrientation;
     // How many handler rows each entry card draws, keyed by entry id; the rest are folded away.
     visibleRows?: Record<string, number>;
+    // Cards the user unfolded: they draw every row and keep the footer row for "Show fewer".
+    unfolded?: Set<string>;
 }
 
 export interface AgentSelection {

@@ -37,6 +37,11 @@ import { EntrySelection, TopologyEntryNode, TopologyHandler } from "../../AgentT
 import { useClickWithDragTolerance } from "../../../hooks/useClickWithDragTolerance";
 import { rowCrossOffset } from "../../AgentTopologyDiagram/topologyLayout";
 import { TriggerGlyph } from "../../AgentTopologyDiagram/TriggerGlyph";
+import { colors as methodColors } from "../EntryNode/components/styles";
+
+// Same palette as the Service Designer's resource list, so a method pill reads the same everywhere.
+const DEFAULT_METHOD_COLOR = "#876036";
+const methodColor = (accessor: string) => methodColors[accessor?.toUpperCase() as keyof typeof methodColors] ?? DEFAULT_METHOD_COLOR;
 
 const Card = styled.div<{ receded: boolean }>`
     width: ${ENTRY_CARD_WIDTH}px;
@@ -102,13 +107,12 @@ const RowBox = styled.div<{ hovered: boolean; dimmed: boolean }>`
     transition: opacity ${FOCUS_FADE_MS}ms ease, background-color 0.15s ease;
 `;
 
-const Accessor = styled.span`
+const Accessor = styled.span<{ method: string }>`
     font-family: var(--vscode-editor-font-family, monospace);
     font-size: 9.5px;
     letter-spacing: 0.04em;
-    color: ${ThemeColors.ON_SURFACE};
-    background-color: ${ThemeColors.SURFACE_CONTAINER};
-    border: 1px solid ${ThemeColors.OUTLINE_VARIANT};
+    color: #fff;
+    background-color: ${(props) => methodColor(props.method)};
     border-radius: 3px;
     padding: 1px 5px;
     flex: none;
@@ -133,8 +137,13 @@ const Footer = styled.div`
     border-top: 1px solid ${ThemeColors.OUTLINE_VARIANT};
     font-family: "GilmerRegular";
     font-size: 11.5px;
-    color: ${ThemeColors.PRIMARY};
+    color: ${ThemeColors.ON_SURFACE_VARIANT};
     cursor: pointer;
+    transition: color 0.15s ease, background-color 0.15s ease;
+    &:hover {
+        color: ${ThemeColors.PRIMARY};
+        background-color: ${NODE_BG_HOVER_COLOR};
+    }
 `;
 
 // Left to right a port sits on the card's right edge level with its row; top to bottom every port sits on the
@@ -189,10 +198,17 @@ function HandlerRow({ handler, dimmed }: RowProps) {
                 }
             }}
         >
-            {handler.accessor && <Accessor>{handler.accessor}</Accessor>}
+            {handler.accessor && <Accessor method={handler.accessor}>{handler.accessor}</Accessor>}
             <RowLabel hovered={!readonly && isHovered}>{handler.label}</RowLabel>
         </RowBox>
     );
+}
+
+function footerLabel(hidden: number, unfolded: boolean | undefined): string | undefined {
+    if (hidden > 0) {
+        return `Show ${hidden} more`;
+    }
+    return unfolded ? "Show fewer" : undefined;
 }
 
 function entrySelection(entry: TopologyEntryNode): EntrySelection {
@@ -270,13 +286,14 @@ function CardMenuPopover({ menu }: { menu: CardMenuState }) {
 
 export function ServiceNodeWidget(props: ServiceNodeWidgetProps) {
     const { model, engine } = props;
-    const { onTriggerSelect, readonly, orientation, focus, setHovered, visibleRows, onExpandEntry } = useTopologyContext();
+    const { onTriggerSelect, readonly, orientation, focus, setHovered, visibleRows, unfolded, onToggleEntry } = useTopologyContext();
     const vertical = orientation === "vertical";
     const [headerHovered, setHeaderHovered] = useState(false);
     const entry = model.node;
     const shown = Math.min(visibleRows?.[entry.id] ?? entry.handlers.length, entry.handlers.length);
     const hidden = entry.handlers.length - shown;
     const rows = entry.handlers.slice(0, shown);
+    const footer = footerLabel(hidden, unfolded?.has(entry.id));
     const isService = entry.kind === "service";
 
     // An automation is a single handler with no rows, so its card opens that handler; a service card opens the
@@ -323,7 +340,7 @@ export function ServiceNodeWidget(props: ServiceNodeWidgetProps) {
             {isService && <CardMenuPopover menu={menu} />}
             {isService &&
                 rows.map((handler) => <HandlerRow key={handler.id} handler={handler} dimmed={rowDimmed(handler)} />)}
-            {hidden > 0 && <Footer onClick={() => onExpandEntry?.(entry.id)}>{`Show ${hidden} more`}</Footer>}
+            {footer && <Footer onClick={() => onToggleEntry?.(entry.id)}>{footer}</Footer>}
             {isService &&
                 rows.map((handler, index) => (
                     <RowPort
