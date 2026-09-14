@@ -1545,6 +1545,7 @@ export interface ServiceModelRequest {
     isLocalRepository?: boolean;
     agentName?: string;
     agentOrgName?: string;
+    agentKind?: string;
 }
 export interface ServiceModelResponse {
     service: ServiceModel;

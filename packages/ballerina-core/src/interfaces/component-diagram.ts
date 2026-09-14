@@ -70,6 +70,15 @@ export type CDWorkflow = {
     connections?: string[];
     invalidSendDataServices?: string[];
     invalidSendDataFunctions?: string[];
+    // Durable-agent facts, present only on a DURABLE_AGENT declaration.
+    role?: string;
+    activityDecls?: CDWorkflowActivity[];
+    tools?: string[];
+    mcpToolKits?: string[];
+    peers?: CDWorkflowPeer[];
+    delegatesTo?: string[];
+    toolConnections?: string[];
+    agentTools?: Record<string, string>;
     uuid: string;
     enableFlowModel: boolean;
     sortText: string;
@@ -85,6 +94,21 @@ export type CDWorkflowEvent = {
 export type CDWorkflowHumanTask = {
     name: string;
     location: CDLocation;
+    userRoles?: string[];
+    title?: string;
+};
+
+export type CDWorkflowActivity = {
+    name: string;
+    requiresApproval?: boolean;
+    userRoles?: string[];
+};
+
+export type CDWorkflowPeer = {
+    name?: string;
+    agentUuid: string;
+    requiresApproval?: boolean;
+    userRoles?: string[];
 };
 
 export type CDActivity = {
@@ -120,7 +144,8 @@ export type CDConnection = {
     // Tool functions that hand the request to another agent; the rest of dependentFunctions are plain tools.
     // Tool name -> uuid of the agent that tool hands off to.
     agentTools?: Record<string, string>;
-    // The agent's class name, e.g. Agent or a definition such as CalendarAssistant.
+    // An agent's class name (e.g. Agent or a definition such as CalendarAssistant), or a model provider
+    // connection's own class name (e.g. Wso2ModelProvider) so it can resolve its brand icon on its own.
     typeName?: string;
     // MCP toolkits listed as tools: the variable's name, or the server URL for an inline toolkit.
     mcpToolKits?: string[];

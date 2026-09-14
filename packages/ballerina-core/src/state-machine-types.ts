@@ -205,7 +205,11 @@ export interface ArtifactInfo {
     isLocalRepository?: boolean;
     agentName?: string;
     agentOrgName?: string;
+    // "durable" for a workflow:DurableAgent; the trigger generator needs a different call shape for it.
+    agentKind?: AgentKind;
 }
+
+export type AgentKind = "ai" | "typed" | "durable";
 
 export interface ManagedCredentialMapping {
     name: string;

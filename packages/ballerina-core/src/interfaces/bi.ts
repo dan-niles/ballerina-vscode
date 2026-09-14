@@ -182,6 +182,8 @@ export type AgentUsage = {
     tryIt?: AgentUsageTryIt;
     // The caller is another agent that uses this one as a tool, not an entry point.
     parentAgent?: boolean;
+    // The channel a durable agent's caller sends on; only a send row has one, and it is drawn beside that channel.
+    channel?: string;
 };
 
 export type AgentUsageTryIt = {
