@@ -39,10 +39,12 @@ import {
 } from '../Connection/styles';
 import { PopupModal, PopupModalStep, PopupModalStepDirection } from '../../../components/PopupModal';
 import { ServiceCreationView } from '../ServiceDesigner/ServiceCreationView';
+import { AgentKind } from "@wso2/ballerina-core";
 
 export interface AddAgentTriggerPopupProps {
     agentName: string;
     agentOrgName?: string;
+    agentKind?: AgentKind;
     projectPath?: string;
     onClose: () => void;
 }
@@ -93,7 +95,7 @@ const channelIcon = (channel: ServiceModel) =>
         : getEntryNodeIcon(channel);
 
 export function AddAgentTriggerPopup(props: AddAgentTriggerPopupProps) {
-    const { agentName, agentOrgName, projectPath, onClose } = props;
+    const { agentName, agentOrgName, agentKind, projectPath, onClose } = props;
     const { rpcClient } = useRpcContext();
     const { cacheTriggers, setCacheTriggers } = useVisualizerContext();
     const [triggers, setTriggers] = useState<TriggerModelsResponse>(cacheTriggers);
@@ -190,6 +192,7 @@ export function AddAgentTriggerPopup(props: AddAgentTriggerPopupProps) {
                                 collectEndpointShape={channel.moduleName === "http"}
                                 agentName={agentName}
                                 agentOrgName={agentOrgName}
+                                agentKind={agentKind}
                                 defaultValues={channelDefaults(channel, agentName)}
                             />
                         ) : (

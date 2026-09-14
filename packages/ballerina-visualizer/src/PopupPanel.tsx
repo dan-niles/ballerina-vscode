@@ -106,6 +106,7 @@ const PopupPanel = (props: PopupPanelProps) => {
                             <AddAgentTriggerPopup
                                 agentName={machineState.artifactInfo?.agentName}
                                 agentOrgName={machineState.artifactInfo?.agentOrgName}
+                                agentKind={machineState.artifactInfo?.agentKind}
                                 projectPath={location.projectPath}
                                 onClose={onClose}
                             />

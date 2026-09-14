@@ -658,6 +658,7 @@ const MainPanel = () => {
                                     isLocalRepository={value?.artifactInfo.isLocalRepository}
                                     agentName={value?.artifactInfo.agentName}
                                     agentOrgName={value?.artifactInfo.agentOrgName}
+                                    agentKind={value?.artifactInfo.agentKind}
                                 />
                             );
                             break;

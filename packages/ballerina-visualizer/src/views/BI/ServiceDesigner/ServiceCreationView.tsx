@@ -23,7 +23,7 @@ import { TitleBar } from "../../../components/TitleBar";
 import { isBetaModule } from "../ComponentListView/componentListUtils";
 import { useRpcContext } from "@wso2/ballerina-rpc-client";
 import { FormField, FormImports, FormValues } from "@wso2/ballerina-side-panel";
-import { DIRECTORY_MAP, EVENT_TYPE, FunctionModel, hasBlockingValidationErrors, isSamePath, LineRange, ModelResolutionIssue, ParameterModel, ProjectStructureArtifactResponse, PropertyModel, RecordTypeField, ServiceInitModel, ValidationResult } from "@wso2/ballerina-core";
+import { AgentKind, DIRECTORY_MAP, EVENT_TYPE, FunctionModel, hasBlockingValidationErrors, isSamePath, LineRange, ModelResolutionIssue, ParameterModel, ProjectStructureArtifactResponse, PropertyModel, RecordTypeField, ServiceInitModel, ValidationResult } from "@wso2/ballerina-core";
 import { FormHeader } from "../../../components/FormHeader";
 import ArtifactForm from "../Forms/ArtifactForm";
 import { AgentEndpointFields, PromptContinuation } from "./Forms/AgentEndpointFields";
@@ -117,6 +117,7 @@ export interface ServiceCreationViewProps {
     isLocalRepository?: boolean;
     agentName?: string;
     agentOrgName?: string;
+    agentKind?: AgentKind;
     isPopup?: boolean;
     defaultValues?: Record<string, string>;
     collectEndpointShape?: boolean;
@@ -185,7 +186,7 @@ function untakenPath(seed: string, taken: string[]): string {
 export function ServiceCreationView(props: ServiceCreationViewProps) {
 
     const { projectPath, orgName, packageName, moduleName, version, isLocalRepository,
-        agentName, agentOrgName, isPopup, onCreated, defaultValues, collectEndpointShape } = props;
+        agentName, agentOrgName, agentKind, isPopup, onCreated, defaultValues, collectEndpointShape } = props;
     const { rpcClient } = useRpcContext();
 
     const [headerInfo, setHeaderInfo] = useState<HeaderInfo>(null);
@@ -213,7 +214,7 @@ export function ServiceCreationView(props: ServiceCreationViewProps) {
                 .getServiceInitModel({
                     filePath: "", orgName: orgName, pkgName: packageName, moduleName: moduleName,
                     listenerName: "", version: version, isLocalRepository: isLocalRepository,
-                    agentName: agentName, agentOrgName: agentOrgName
+                    agentName: agentName, agentOrgName: agentOrgName, agentKind: agentKind
                 });
 
             let timer: ReturnType<typeof setTimeout> | null = null;
