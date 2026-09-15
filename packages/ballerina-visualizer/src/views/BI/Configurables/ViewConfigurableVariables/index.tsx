@@ -84,6 +84,8 @@ export interface ConfigProps {
     testsConfigTomlPath?: string;
     org: string;
     addNew?: boolean;
+    /** Category (e.g. "ballerinax/amp") to select on load instead of the first category. */
+    initialModuleIdentifier?: string;
 }
 
 interface CategoryWithModules {
@@ -137,6 +139,12 @@ export function ViewConfigurableVariables(props?: ConfigProps) {
     const selectedModuleRef = useRef<PackageModuleState>(null);
     const [testConfigVariables, setTestConfigVariables] = useState<ConfigVariablesState>({});
     const [testCategoriesWithModules, setTestCategoriesWithModules] = useState<CategoryWithModules[]>([]);
+
+    useEffect(() => {
+        if (props.initialModuleIdentifier) {
+            setSelectedModule({ category: props.initialModuleIdentifier, module: '' });
+        }
+    }, []);
 
     useEffect(() => {
         rpcClient

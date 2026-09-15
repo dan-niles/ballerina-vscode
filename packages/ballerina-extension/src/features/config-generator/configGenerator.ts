@@ -293,7 +293,9 @@ export async function handleOnUnSetValues(packageName: string, packagePath: stri
             }
         }
 
-        openView(EVENT_TYPE.OPEN_VIEW, { view: MACHINE_VIEW.ViewConfigVariables });
+        openView(EVENT_TYPE.OPEN_VIEW, ampConfigMissing
+            ? { view: MACHINE_VIEW.ViewConfigVariables, identifier: 'ballerinax/amp' }
+            : { view: MACHINE_VIEW.ViewConfigVariables });
         return false;
     } else if (!isCommand && result === ignoreButton) {
         if (executeRun) {

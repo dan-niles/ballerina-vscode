@@ -908,6 +908,7 @@ const MainPanel = () => {
                                     fileName={configFilePath}
                                     testsConfigTomlPath={testsConfigTomlPath}
                                     org={value?.org}
+                                    initialModuleIdentifier={value?.identifier}
                                 />
                             );
                             break;
