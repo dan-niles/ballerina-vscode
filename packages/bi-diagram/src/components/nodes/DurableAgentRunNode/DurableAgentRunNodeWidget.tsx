@@ -48,7 +48,7 @@ import {
 import { Button, Icon, Item, Menu, MenuItem, ThemeColors, getAIModuleIcon, DefaultLlmIcon } from "@wso2/ui-toolkit";
 import { MoreVertIcon } from "../../../resources/icons";
 import { AgentData, FlowNode, ToolData } from "../../../utils/types";
-import NodeIcon from "../../NodeIcon";
+import NodeIcon, { DurableAgentIcon } from "../../NodeIcon";
 import { ApprovalBadge } from "../AgentWidget/ApprovalBadge";
 import ConnectorIcon from "../../ConnectorIcon";
 import { useDiagramContext } from "../../DiagramContext";
@@ -68,11 +68,12 @@ import {
     durableAgentBoxHeight,
     durableBottomTileY,
     durableChannelSenders,
+    durableHasSenders,
     durableLeftCircleTop,
+    durableLeftSenders,
     durableRunUsages,
     durableSlotCircleOffset,
     durableUsageColumn,
-    durableUsageRowCount,
     getDurableAgentUsages,
 } from "../AgentWidget/agentNodeLayout";
 
@@ -548,6 +549,23 @@ function durableTriggerHost(
     };
 }
 
+// The declaration canvas offers each channel its own Add Trigger tile when the page can open the picker for a data event.
+function durableEventTriggerHost(
+    agentNode: { onAddEventTrigger?: (node: FlowNode, event: ToolData) => void } | undefined,
+    isAgentReference: boolean,
+    readOnly: boolean,
+    node: FlowNode
+): { offered: boolean; addFor: (item: CapabilityItem) => (() => void) | undefined } {
+    const onAddEventTrigger = agentNode?.onAddEventTrigger;
+    const offered = onAddEventTrigger !== undefined && !isAgentReference;
+    const add = (item: CapabilityItem) => () => {
+        if (!readOnly) {
+            onAddEventTrigger(node, item.data);
+        }
+    };
+    return { offered, addFor: (item) => (offered ? add(item) : undefined) };
+}
+
 // The trigger block: the visible caller rows, "+N more" for the rest, then the Add Trigger tile.
 function UsageRows({ column, boxEdgeX, codedata, markerId, readOnly, animate, onOpen, onAddTrigger }: UsageRowsProps) {
     const stagger = (row: number) => (animate ? row * USAGE_ROW_STAGGER_MS : undefined);
@@ -588,6 +606,7 @@ function UsageRows({ column, boxEdgeX, codedata, markerId, readOnly, animate, on
 }
 
 interface ChannelSendersProps {
+    channel: string;
     senders: AgentUsage[];
     // The circle's offset down its slot, so each row's arrow bends to the circle's centre.
     circleOffset: number;
@@ -595,13 +614,78 @@ interface ChannelSendersProps {
     codedata: FlowNode["codedata"];
     markerId: string;
     animate: boolean;
+    readOnly: boolean;
     onOpen: (usage: AgentUsage) => void;
+    // Offered on the declaration canvas: a trigger that sends data on this channel.
+    onAddTrigger?: () => void;
 }
 
-// The handlers that send on one channel, stacked beside its circle with their arrows bending into it.
-function ChannelSenders({ senders, circleOffset, circleEdgeX, codedata, markerId, animate, onOpen }: ChannelSendersProps) {
+// A capability's circle and label light up together when the whole target can be clicked; the open-flow button
+// shows itself while the row is hovered either way.
+const capabilityHitStyle = (clickable: boolean) => css`
+    cursor: ${clickable ? "pointer" : "default"};
+    .capability-circle {
+        transition: stroke 0.4s ease-out;
+    }
+    &:hover .open-flow {
+        opacity: 1;
+    }
+    ${clickable
+        ? css`
+              &:hover .capability-circle {
+                  stroke: ${NODE_BORDER_SELECTED_COLOR};
+              }
+              &:hover .capability-label {
+                  fill: ${NODE_BORDER_SELECTED_COLOR};
+                  color: ${NODE_BORDER_SELECTED_COLOR};
+              }
+          `
+        : ""}
+`;
+
+const CapabilityLabel = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 44px;
+    color: ${NODE_TEXT_COLOR};
+    font-family: "GilmerRegular";
+    font-size: 14px;
+    white-space: nowrap;
+`;
+
+// The agent run node's Open Agent chip, shrunk to its glyph.
+const OpenFlowButton = styled.div`
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border: 1px solid ${ThemeColors.OUTLINE_VARIANT};
+    border-radius: 6px;
+    color: ${ThemeColors.ON_SURFACE};
+    cursor: pointer;
+    pointer-events: all;
+    opacity: 0;
+    transition: opacity 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+    &:hover {
+        border-color: ${ThemeColors.PRIMARY};
+        background-color: ${ThemeColors.SURFACE_BRIGHT};
+    }
+`;
+
+// The vertical the sender rows' bent arrows share on their way into the circle.
+const SENDER_TRUNK_X = USAGE_SQUARE_X + 57;
+// The tile's plus (r 9) tops out where a square would (y 2), so the gap above it matches the gap between squares.
+const SENDER_TILE_CENTER_Y = 11;
+
+// The handlers that send on one channel, stacked beside its circle with their arrows bending into it, then the
+// Add Trigger tile for the channel: alone it hangs off the circle; under senders it joins their trunk.
+function ChannelSenders({ channel, senders, circleOffset, circleEdgeX, codedata, markerId, animate, readOnly, onOpen, onAddTrigger }: ChannelSendersProps) {
     const visible = senders.slice(0, AGENT_USAGE_ROW_LIMIT);
     const hidden = senders.length - visible.length;
+    const rows = visible.length + (hidden > 0 ? 1 : 0);
+    const tileY = rows * AGENT_USAGE_ROW_PITCH + (rows > 0 ? SENDER_TILE_CENTER_Y : 24);
     const stagger = (row: number) => (animate ? row * USAGE_ROW_STAGGER_MS : undefined);
     return (
         <>
@@ -622,6 +706,27 @@ function ChannelSenders({ senders, circleOffset, circleEdgeX, codedata, markerId
                 <text x={USAGE_SQUARE_X + 44} y={visible.length * AGENT_USAGE_ROW_PITCH + 24} textAnchor="end" fill={NODE_TEXT_COLOR} opacity={0.7} fontSize="12px" fontFamily="GilmerRegular" dominantBaseline="middle" css={css`${fadeIn(stagger(visible.length))}`}>
                     {`+${hidden} more`}
                 </text>
+            )}
+            {onAddTrigger && rows > 0 && (
+                <path
+                    d={`M ${SENDER_TRUNK_X} ${tileY} V ${circleOffset + 24}`}
+                    fill="none"
+                    style={{ stroke: NODE_TEXT_COLOR, strokeWidth: 1.5, strokeDasharray: "2 4" }}
+                    css={css`${fadeIn(stagger(rows))}`}
+                />
+            )}
+            {onAddTrigger && (
+                <EdgeAddButton
+                    testId={`durable-agent-add-event-trigger-${sanitizeId(channel)}`}
+                    anchorX={rows > 0 ? SENDER_TRUNK_X : circleEdgeX}
+                    y={tileY}
+                    side="left"
+                    label="Add Trigger"
+                    title={`Add an endpoint that sends data on ${channel} to a running instance`}
+                    animationDelay={stagger(rows)}
+                    onClick={onAddTrigger}
+                    readOnly={readOnly}
+                />
             )}
         </>
     );
@@ -828,13 +933,16 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
         if (readOnly) {
             return;
         }
-        // A tool or activity circle opens the function it registers, as the AI agent's tool circles do.
-        if (item.kind === "tool" || item.kind === "activity") {
-            const functionName = (item.data as { values?: Record<string, string> }).values?.[item.kind] ?? item.data.name;
-            agentNode?.goToTool?.({ name: functionName } as ToolData, model.node);
-            return;
-        }
         agentNode?.onEditCapability?.(model.node, { ...item.data, type: item.kind });
+    };
+
+    // A tool or activity registers a function whose flow the sublink opens, as the AI agent's tool circles do.
+    const flowOpener = (item: CapabilityItem): (() => void) | undefined => {
+        if (readOnly || !agentNode?.goToTool || (item.kind !== "tool" && item.kind !== "activity")) {
+            return undefined;
+        }
+        const functionName = item.data.values?.[item.kind] ?? item.data.name;
+        return () => agentNode.goToTool({ name: functionName } as ToolData, model.node);
     };
 
     const onCapabilityDelete = (item: CapabilityItem) => (event: React.MouseEvent<SVGGElement>) => {
@@ -918,10 +1026,12 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
         ...(nodeMetadata?.peers || []).map((peer: AgentCapability): CapabilityItem => ({ data: peer, kind: "peer" })),
     ];
 
+    const declaredHumanTasks: AgentCapability[] = nodeMetadata?.humanTasks || [];
+    const declaredEvents: AgentCapability[] = nodeMetadata?.events || [];
     // Capability circles rendered on the left side: human tasks, then events (arrows point into the box).
     const leftItems: CapabilityItem[] = [
-        ...(nodeMetadata?.humanTasks || []).map((humanTask: AgentCapability): CapabilityItem => ({ data: humanTask, kind: "humanTask" })),
-        ...(nodeMetadata?.events || []).map((event: AgentCapability): CapabilityItem => ({ data: event, kind: "event" })),
+        ...declaredHumanTasks.map((humanTask: AgentCapability): CapabilityItem => ({ data: humanTask, kind: "humanTask" })),
+        ...declaredEvents.map((event: AgentCapability): CapabilityItem => ({ data: event, kind: "event" })),
     ];
 
     // Triggers that run the agent take the top of the left column; the rail's labels need a wider column than the
@@ -931,8 +1041,10 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
     const usages = getDurableAgentUsages(model.node);
     const usageColumn = durableUsageColumn(durableRunUsages(usages), triggerHost.canAddTrigger);
     const sendersOf = (item: CapabilityItem): AgentUsage[] => (item.kind === "event" ? durableChannelSenders(usages, item.data.name) : []);
-    const leftSenders = leftItems.map((item) => durableUsageRowCount(sendersOf(item)));
-    const senderShift = leftSenders.some((senderRows) => senderRows > 0) ? DURABLE_SENDER_COLUMN_WIDTH : 0;
+    const eventTriggerHost = durableEventTriggerHost(agentNode, isAgentReference, readOnly, model.node);
+    const leftSenders = durableLeftSenders(declaredHumanTasks.length, declaredEvents, usages, eventTriggerHost.offered);
+    // A channel's Add Trigger tile alone fits beside its circle; only real callers open the sender column.
+    const senderShift = durableHasSenders(declaredEvents, usages) ? DURABLE_SENDER_COLUMN_WIDTH : 0;
     const columnShift = usageColumn.shift + senderShift;
     const leftSvgWidth = LEFT_SVG_WIDTH + columnShift;
     const rows = durableBoxRows(usageColumn.triggerRows, leftSenders, rightItems.length, !isAgentReference);
@@ -1230,20 +1342,22 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                         />
                     </g>
                     {leftItems.map((item: CapabilityItem, index: number) => {
-                        const senders = sendersOf(item);
-                        if (senders.length === 0) {
+                        if (rows.leftSenders[index] === 0) {
                             return null;
                         }
                         return (
                             <g key={`senders-${item.data.name}`} transform={`translate(0, ${durableLeftCircleTop(rows, index, containerHeight)})`}>
                                 <ChannelSenders
-                                    senders={senders}
+                                    channel={item.data.name}
+                                    senders={sendersOf(item)}
                                     circleOffset={durableSlotCircleOffset(rows.leftSenders[index])}
                                     circleEdgeX={columnShift + LEFT_CIRCLE_EDGE_X}
                                     codedata={model.node.codedata}
                                     markerId={`${model.node.id}-arrow-head-usage`}
                                     animate={animatesUsages(nodeMetadata)}
+                                    readOnly={readOnly}
                                     onOpen={openUsage}
+                                    onAddTrigger={eventTriggerHost.addFor(item)}
                                 />
                             </g>
                         );
@@ -1257,37 +1371,49 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                         const top = durableLeftCircleTop(rows, index, containerHeight) + durableSlotCircleOffset(rows.leftSenders[index]);
                         return (
                             <g key={`${item.kind}-${itemName}-${index}`} transform={`translate(${columnShift}, ${top})`}>
-                                <circle
-                                    cx="220"
-                                    cy="24"
-                                    r="22"
-                                    fill={NODE_BG_COLOR}
-                                    stroke={NODE_BORDER_COLOR}
-                                    strokeWidth={1.5}
-                                    strokeDasharray={disabled ? "5 5" : "none"}
-                                    opacity={disabled ? 0.7 : 1}
-                                    onClick={() => onCapabilityClick(item)}
-                                    css={css`
-                                        cursor: ${readOnly ? "default" : "pointer"};
-                                        transition: stroke 0.4s ease-out;
-                                        &:hover {
-                                            stroke: ${readOnly ? NODE_BORDER_COLOR : NODE_BORDER_SELECTED_COLOR};
-                                        }
-                                    `}
-                                >
-                                    <title>{itemName}</title>
-                                </circle>
+                                {/* The circle and its label are one target; a captioned circle's target reaches down to the caption. */}
+                                <g onClick={readOnly ? undefined : () => onCapabilityClick(item)} css={capabilityHitStyle(!readOnly)}>
+                                    <rect x={hasSenders ? 196 : 40} y="2" width={hasSenders ? 48 : 203} height={hasSenders ? 64 : 44} fill="transparent" style={{ pointerEvents: "all" }} />
+                                    <circle
+                                        className="capability-circle"
+                                        cx="220"
+                                        cy="24"
+                                        r="22"
+                                        fill={NODE_BG_COLOR}
+                                        stroke={NODE_BORDER_COLOR}
+                                        strokeWidth={1.5}
+                                        strokeDasharray={disabled ? "5 5" : "none"}
+                                        opacity={disabled ? 0.7 : 1}
+                                    >
+                                        <title>{itemName}</title>
+                                    </circle>
 
-                                <foreignObject
-                                    x="208"
-                                    y="12"
-                                    width="44"
-                                    height="44"
-                                    fill={NODE_TEXT_COLOR}
-                                    style={{ pointerEvents: "none" }}
-                                >
-                                    <div className="connector-icon">{renderCapabilityIcon(item)}</div>
-                                </foreignObject>
+                                    <foreignObject
+                                        x="208"
+                                        y="12"
+                                        width="44"
+                                        height="44"
+                                        fill={NODE_TEXT_COLOR}
+                                        style={{ pointerEvents: "none" }}
+                                    >
+                                        <div className="connector-icon">{renderCapabilityIcon(item)}</div>
+                                    </foreignObject>
+
+                                    {/* Senders occupy the circle's left, so a channel they feed carries its name underneath. */}
+                                    <text
+                                        className="capability-label"
+                                        x={hasSenders ? 220 : 190}
+                                        y={hasSenders ? 58 : 28}
+                                        textAnchor={hasSenders ? "middle" : "end"}
+                                        fill={NODE_TEXT_COLOR}
+                                        fontSize={hasSenders ? "12px" : "14px"}
+                                        fontFamily="GilmerRegular"
+                                        dominantBaseline="middle"
+                                    >
+                                        {itemName.length > 20 ? `${itemName.slice(0, 20)}...` : itemName}
+                                        <title>{itemName}</title>
+                                    </text>
+                                </g>
 
                                 <g
                                     transform="translate(236, 8)"
@@ -1304,20 +1430,6 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                                     <circle cx="0" cy="0" r="7" fill={NODE_BG_COLOR} stroke={NODE_BORDER_COLOR} strokeWidth={1} />
                                     <text x="0" y="2.8" textAnchor="middle" fontSize="9" fill={NODE_TEXT_COLOR}>✕</text>
                                 </g>
-
-                                {/* Senders occupy the circle's left, so a channel they feed carries its name underneath. */}
-                                <text
-                                    x={hasSenders ? 220 : 190}
-                                    y={hasSenders ? 58 : 28}
-                                    textAnchor={hasSenders ? "middle" : "end"}
-                                    fill={NODE_TEXT_COLOR}
-                                    fontSize={hasSenders ? "12px" : "14px"}
-                                    fontFamily="GilmerRegular"
-                                    dominantBaseline="middle"
-                                >
-                                    {itemName.length > 20 ? `${itemName.slice(0, 20)}...` : itemName}
-                                    <title>{itemName}</title>
-                                </text>
 
                                 <line
                                     x1="243"
@@ -1386,7 +1498,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                 <NodeStyles.Column style={{ height: `${model.node.viewState?.ch}px` }}>
                     <NodeStyles.Row readOnly={readOnly}>
                         <NodeStyles.Icon onClick={handleOnClick}>
-                            <NodeIcon type={model.node.codedata.node} size={24} />
+                            <DurableAgentIcon size={24} />
                         </NodeStyles.Icon>
                         <NodeStyles.Row readOnly={readOnly}>
                             <NodeStyles.Header onClick={handleOnClick}>
@@ -1521,61 +1633,73 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                 {/* circles for tools and activities */}
                 {rightItems.map((item: CapabilityItem, index: number) => {
                     const itemName = item.data.name;
+                    // A registered tool has no configuration form of its own to open.
+                    const clickable = !readOnly && item.kind !== "tool";
+                    const openFlow = flowOpener(item);
                     return (
                         <g
                             key={`${item.kind}-${itemName}-${index}`}
                             transform={`translate(0, ${rowOffsetY(index + 1)})`}
                         >
-                            <circle
-                                cx="80"
-                                cy="24"
-                                r="22"
-                                fill={NODE_BG_COLOR}
-                                stroke={NODE_BORDER_COLOR}
-                                strokeWidth={1.5}
-                                strokeDasharray={disabled ? "5 5" : "none"}
-                                opacity={disabled ? 0.7 : 1}
-                                onClick={item.kind === "tool" ? undefined : () => onCapabilityClick(item)}
-                                css={css`
-                                    cursor: ${readOnly || item.kind === "tool" ? "default" : "pointer"};
-                                    transition: stroke 0.4s ease-out;
-                                    &:hover {
-                                        stroke: ${readOnly || item.kind === "tool" ? NODE_BORDER_COLOR : NODE_BORDER_SELECTED_COLOR};
-                                    }
-                                `}
-                            >
-                                <title>{itemName}</title>
-                            </circle>
+                            {/* The circle, its badge and its label are one target: the label is the easier thing to aim at. */}
+                            <g onClick={clickable ? () => onCapabilityClick(item) : undefined} css={capabilityHitStyle(clickable)}>
+                                <rect x="58" y="2" width={sideSvgWidth - 58} height="44" fill="transparent" style={{ pointerEvents: "all" }} />
+                                <circle
+                                    className="capability-circle"
+                                    cx="80"
+                                    cy="24"
+                                    r="22"
+                                    fill={NODE_BG_COLOR}
+                                    stroke={NODE_BORDER_COLOR}
+                                    strokeWidth={1.5}
+                                    strokeDasharray={disabled ? "5 5" : "none"}
+                                    opacity={disabled ? 0.7 : 1}
+                                >
+                                    <title>{itemName}</title>
+                                </circle>
 
-                            <foreignObject
-                                x="68"
-                                y="12"
-                                width="44"
-                                height="44"
-                                fill={NODE_TEXT_COLOR}
-                                style={{ pointerEvents: "none" }}
-                            >
-                                <div className="connector-icon">{renderCapabilityIcon(item)}</div>
-                            </foreignObject>
+                                <foreignObject
+                                    x="68"
+                                    y="12"
+                                    width="44"
+                                    height="44"
+                                    fill={NODE_TEXT_COLOR}
+                                    style={{ pointerEvents: "none" }}
+                                >
+                                    <div className="connector-icon">{renderCapabilityIcon(item)}</div>
+                                </foreignObject>
 
-                            {/* The same shield the chat agent puts on a gated tool, in the same
-                                bottom-right corner it now uses — which is also the only one free
-                                here, since the remove button owns the top-right. Keyed on the
-                                declared `requiresApproval` rather than the capability kind, because a
-                                registered tool carries it too and used to render as ungated. The
-                                click mirrors the circle underneath, which a tool does not have --
-                                and neither does a read-only canvas, where the handler would be a
-                                no-op the badge still advertised with a pointer cursor. */}
-                            {isApprovalGated(item) && (
-                                <ApprovalBadge
-                                    background={NODE_BG_COLOR}
-                                    onClick={
-                                        readOnly || item.kind === "tool"
-                                            ? undefined
-                                            : () => onCapabilityClick(item)
-                                    }
-                                />
-                            )}
+                                {/* The same shield the chat agent puts on a gated tool, in the same bottom-right corner — the
+                                    only one free here, since the remove button owns the top-right. Keyed on the declared
+                                    `requiresApproval` rather than the capability kind, because a registered tool carries it too. */}
+                                {isApprovalGated(item) && <ApprovalBadge background={NODE_BG_COLOR} />}
+
+                                {/* HTML for the label so the open-flow button can sit right after text of any width. */}
+                                <foreignObject x="110" y="2" width={sideSvgWidth - 110} height="44" style={{ pointerEvents: "none" }}>
+                                    <CapabilityLabel>
+                                        <span className="capability-label" title={itemName}>
+                                            {itemName.length > 20 ? `${itemName.slice(0, 20)}...` : itemName}
+                                        </span>
+                                        {openFlow && (
+                                            <OpenFlowButton
+                                                className="open-flow"
+                                                data-testid={`durable-agent-open-flow-${sanitizeId(itemName)}`}
+                                                title="Open flow"
+                                                onClick={(event: React.MouseEvent) => {
+                                                    event.stopPropagation();
+                                                    openFlow();
+                                                }}
+                                            >
+                                                <Icon
+                                                    name="bi-arrow-outward"
+                                                    sx={{ display: "flex", alignItems: "center", justifyContent: "center", width: 13, height: 13 }}
+                                                    iconSx={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 13, fontSize: 13, lineHeight: 1 }}
+                                                />
+                                            </OpenFlowButton>
+                                        )}
+                                    </CapabilityLabel>
+                                </foreignObject>
+                            </g>
 
                             <g
                                 transform="translate(96, 8)"
@@ -1592,19 +1716,6 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                                 <circle cx="0" cy="0" r="7" fill={NODE_BG_COLOR} stroke={NODE_BORDER_COLOR} strokeWidth={1} />
                                 <text x="0" y="2.8" textAnchor="middle" fontSize="9" fill={NODE_TEXT_COLOR}>✕</text>
                             </g>
-
-                            <text
-                                x="110"
-                                y="28"
-                                textAnchor="start"
-                                fill={NODE_TEXT_COLOR}
-                                fontSize="14px"
-                                fontFamily="GilmerRegular"
-                                dominantBaseline="middle"
-                            >
-                                {itemName.length > 20 ? `${itemName.slice(0, 20)}...` : itemName}
-                                <title>{itemName}</title>
-                            </text>
 
                             <line
                                 x1="0"

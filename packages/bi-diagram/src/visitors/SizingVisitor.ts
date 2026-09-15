@@ -47,9 +47,11 @@ import { getEvalNodeContainerHeight } from "../components/nodes/EvalNode/evalNod
 import {
     AGENT_USAGE_COLUMN_WIDTH,
     AgentUsageOptions,
+    canAddEventTrigger,
     canAddTrigger,
     DurableBoxRows,
     durableAgentBoxHeight,
+    durableHasSenders,
     durableLeftColumnWidth,
     durableLeftSenders,
     durableRunUsages,
@@ -414,7 +416,8 @@ export class SizingVisitor implements BaseVisitor {
     private durableBoxRows(nodeMetadata: DurableBoxMetadata | undefined, usages: AgentUsage[]): DurableBoxRows {
         return {
             triggerRows: durableTriggerRows(durableRunUsages(usages), canAddTrigger(this.agentUsageOptions)),
-            leftSenders: durableLeftSenders(nodeMetadata?.humanTasks?.length ?? 0, nodeMetadata?.events ?? [], usages),
+            leftSenders: durableLeftSenders(nodeMetadata?.humanTasks?.length ?? 0, nodeMetadata?.events ?? [], usages,
+                canAddEventTrigger(this.agentUsageOptions)),
             leftTiles: 2,
             rightRows: 1 + (nodeMetadata?.tools?.length ?? 0) + (nodeMetadata?.activities?.length ?? 0) + (nodeMetadata?.peers?.length ?? 0) + 1,
         };
@@ -458,7 +461,7 @@ export class SizingVisitor implements BaseVisitor {
         const rows = this.durableBoxRows(nodeMetadata, getDurableAgentUsages(node));
 
         // The left column always draws its tiles here; trigger rows need the wider rail, sender rows a column of their own.
-        const hasSenders = rows.leftSenders.some((senderRows) => senderRows > 0);
+        const hasSenders = durableHasSenders(nodeMetadata?.events ?? [], getDurableAgentUsages(node));
         const containerLeftWidth = halfNodeWidth + durableLeftColumnWidth(sideColumnWidth, rows.triggerRows, hasSenders);
         // Reserve right-side space for the model circle and capability circles column.
         const containerRightWidth = halfNodeWidth + sideColumnWidth;

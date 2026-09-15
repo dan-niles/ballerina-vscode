@@ -32,7 +32,7 @@ jest.mock("@wso2/ballerina-side-panel", () => ({}));
 jest.mock("../../../utils/bi", () => ({ convertNodePropertyToFormField: jest.fn() }));
 jest.mock("./toolForm", () => ({ OAUTH_GROUP: "oauth" }));
 
-import { agentKindOf, agentVarNameOf, openAddAgentTrigger } from "./utils";
+import { agentKindOf, agentVarNameOf, openAddAgentTrigger, startAddDurableEventTrigger } from "./utils";
 
 function rpcWithOpenView() {
     const openView = jest.fn();
@@ -60,6 +60,18 @@ describe("openAddAgentTrigger", () => {
     it("reads the kind off the flow node: only the durable agent box is durable", () => {
         expect(agentKindOf({ codedata: { node: "DURABLE_AGENT_RUN" } } as unknown as FlowNode)).toBe("durable");
         expect(agentKindOf({ codedata: { node: "AGENT" } } as unknown as FlowNode)).toBeUndefined();
+    });
+
+    it("carries the data event's channel and declared types, so the endpoint form can seed a sendData turn", () => {
+        const { rpcClient, openView } = rpcWithOpenView();
+        const box = { codedata: { node: "DURABLE_AGENT_RUN" }, metadata: { data: { agentBox: true, agentName: "claimAgent" } } } as unknown as FlowNode;
+        startAddDurableEventTrigger(box, { name: "chat", values: { requestType: "string", responseType: "string" } } as any, rpcClient);
+        expect(openView.mock.calls[0][0].location.artifactInfo).toEqual({
+            agentName: "claimAgent",
+            agentOrgName: "ballerina",
+            agentKind: "durable",
+            agentEvent: { name: "chat", request: "string", response: "string" },
+        });
     });
 
     it("names a durable agent from its box metadata, where the declaration form keeps it", () => {

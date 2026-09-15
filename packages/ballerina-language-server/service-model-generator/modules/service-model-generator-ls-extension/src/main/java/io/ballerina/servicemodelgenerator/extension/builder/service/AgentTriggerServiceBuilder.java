@@ -111,8 +111,11 @@ public class AgentTriggerServiceBuilder extends SchemaDrivenServiceBuilder {
         if (durable) {
             initModel.addProperty(AGENT_KIND_PROPERTY, hiddenValue(context.agentKind()));
         }
+        if (durable && context.isEventTrigger()) {
+            addEventChannelValues(initModel, context);
+        }
         channel.ifPresent(c -> {
-            c.additionalProperties().forEach(initModel::addProperty);
+            c.additionalProperties(context).forEach(initModel::addProperty);
             // A durable agent takes each chat turn on a declared event channel; the design model is not at hand
             // here to list them, so the form asks for the name and offers the conventional one.
             if (durable && c.kind() == AgentTriggerKind.CHAT) {
@@ -121,6 +124,14 @@ public class AgentTriggerServiceBuilder extends SchemaDrivenServiceBuilder {
             c.customizeInitModel(initModel, triggerModelFor(initModel).orElse(null));
         });
         return initModel;
+    }
+
+    // An event trigger sends on one declared channel; its response type, when the channel declares one, is awaited.
+    private static void addEventChannelValues(ServiceInitModel initModel, GetServiceInitModelContext context) {
+        initModel.addProperty(AgentTriggerContext.EVENT_CHANNEL_PROPERTY, hiddenValue(context.eventChannel()));
+        if (context.eventResponse() != null && !context.eventResponse().isBlank()) {
+            initModel.addProperty(AgentTriggerContext.EVENT_RESPONSE_PROPERTY, hiddenValue(context.eventResponse()));
+        }
     }
 
     private static Value chatChannelField() {
@@ -302,6 +313,8 @@ public class AgentTriggerServiceBuilder extends SchemaDrivenServiceBuilder {
         owned.add(AGENT_ORG_PROPERTY);
         owned.add(AGENT_KIND_PROPERTY);
         owned.add(AgentTriggerContext.CHAT_CHANNEL_PROPERTY);
+        owned.add(AgentTriggerContext.EVENT_CHANNEL_PROPERTY);
+        owned.add(AgentTriggerContext.EVENT_RESPONSE_PROPERTY);
         for (String key : owned) {
             Value field = properties.get(key);
             String value = field == null ? null : field.getValue();

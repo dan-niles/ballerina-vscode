@@ -348,7 +348,13 @@ const MainPanel = () => {
                             if ((await fetchProductMode(rpcClient)) === ProductMode.AGENT_BUILDER) {
                                 const { AgentBuilderOverview } = await import("./views/BI/AgentBuilderOverview");
                                 if (isStaleNavigation()) return;
-                                setViewComponent(<AgentBuilderOverview projectPath={value.projectPath} />);
+                                setViewComponent(
+                                    <AgentBuilderOverview
+                                        projectPath={value.projectPath}
+                                        isInDevant={value.isInDevant}
+                                        isICPSupported={value.metadata?.isICPSupported}
+                                    />
+                                );
                                 break;
                             }
                             const { PackageOverview } = await import("./views/BI/PackageOverview");
@@ -659,6 +665,7 @@ const MainPanel = () => {
                                     agentName={value?.artifactInfo.agentName}
                                     agentOrgName={value?.artifactInfo.agentOrgName}
                                     agentKind={value?.artifactInfo.agentKind}
+                                    agentEvent={value?.artifactInfo.agentEvent}
                                 />
                             );
                             break;
@@ -902,6 +909,7 @@ const MainPanel = () => {
                                     fileName={configFilePath}
                                     testsConfigTomlPath={testsConfigTomlPath}
                                     org={value?.org}
+                                    initialModuleIdentifier={value?.identifier}
                                 />
                             );
                             break;

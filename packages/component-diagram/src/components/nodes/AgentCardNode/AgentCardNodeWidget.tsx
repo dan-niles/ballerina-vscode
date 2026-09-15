@@ -21,7 +21,7 @@ import styled from "@emotion/styled";
 import { css } from "@emotion/react";
 import { DiagramEngine, PortWidget } from "@projectstorm/react-diagrams-core";
 import { Icon, ThemeColors, getAIModuleIcon } from "@wso2/ui-toolkit";
-import { NodeIcon } from "@wso2/bi-diagram";
+import { DurableAgentIcon, NodeIcon } from "@wso2/bi-diagram";
 import { resolveBrandIconFromUrl } from "@wso2/ballerina-core";
 import { AgentCardNodeModel, inletPortName } from "./AgentCardNodeModel";
 import {
@@ -713,7 +713,7 @@ export function AgentCardNodeWidget(props: AgentCardNodeWidgetProps) {
             {durable && <Inlets node={node} model={model} engine={engine} vertical={vertical} onInlet={onInlet} offInlet={offInlet} />}
             <Body>
                 <HeaderRow>
-                    <NodeIcon type={isWorkflow ? "WORKFLOW_RUN" : durable ? "DURABLE_AGENT_RUN" : "AGENT"} size={24} />
+                    {isWorkflow ? <NodeIcon type="WORKFLOW_RUN" size={24} /> : durable ? <DurableAgentIcon size={24} /> : <NodeIcon type="AGENT" size={24} />}
                     <HeaderText title={node.name}>
                         <Eyebrow>{node.typeName}</Eyebrow>
                         <Name>{node.name}</Name>

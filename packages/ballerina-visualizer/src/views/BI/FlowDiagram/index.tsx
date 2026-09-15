@@ -19,13 +19,14 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { useRpcContext } from "@wso2/ballerina-rpc-client";
 import styled from "@emotion/styled";
-import { goToAgent, startAddAgentTrigger, startAgentChat } from "../AIChatAgent/utils";
+import { goToAgent, startAddAgentTrigger, startAddDurableEventTrigger, startAgentChat } from "../AIChatAgent/utils";
 import { DIAGRAM_REFRESH_DEBOUNCE_MS } from "../diagramRefreshDebounce";
 import { MemoizedDiagram } from "@wso2/bi-diagram";
 import {
     BIAvailableNodesRequest,
     Flow,
     FlowNode,
+    ToolData,
     Branch,
     Category,
     AvailableNode,
@@ -4224,6 +4225,7 @@ export function BIFlowDiagram(props: BIFlowDiagramProps) {
                 onAddEvent: handleOnAddDurableEvent,
                 // The declaration canvas offers the durable box an Add Trigger tile, as the agent page does for an AI agent.
                 onAddTrigger: agentOnlyView ? (node: FlowNode) => startAddAgentTrigger(node, rpcClient) : agentEditor.diagramCallbacks.onAddTrigger,
+                onAddEventTrigger: agentOnlyView ? (node: FlowNode, event: ToolData) => startAddDurableEventTrigger(node, event, rpcClient) : undefined,
                 onEditCapability: handleOnEditDurableCapability,
                 onDeleteCapability: handleOnDeleteDurableCapability,
                 onConfigureAgent: handleOnConfigureAgentIdentifier,

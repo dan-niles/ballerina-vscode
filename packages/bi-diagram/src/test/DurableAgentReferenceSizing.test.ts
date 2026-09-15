@@ -30,6 +30,7 @@ import {
 } from "../resources/constants";
 import {
     AGENT_USAGE_ROW_PITCH,
+    DURABLE_CAPTION_HEIGHT,
     DURABLE_FOOTER_TILE_PITCH,
     DURABLE_LEFT_SECTION_GAP,
     DURABLE_SENDER_COLUMN_WIDTH,
@@ -103,6 +104,18 @@ describe("SizingVisitor: durable-agent reference sizing", () => {
         const circles = DURABLE_LEFT_SECTION_GAP + (NODE_HEIGHT + AGENT_NODE_TOOL_GAP) + 2 * AGENT_USAGE_ROW_PITCH;
         expect(node.viewState.lw).toBe(halfNodeWidth + sideColumnWidth + DURABLE_USAGE_COLUMN_EXTRA_WIDTH + DURABLE_SENDER_COLUMN_WIDTH);
         expect(node.viewState.ch).toBe(triggerBlock + circles + footerTiles);
+    });
+
+    it("gives each channel an Add Trigger tile beside its circle without opening the sender column", () => {
+        const node = createAgentBoxNode();
+        node.metadata.data = { agentBox: true, events: [{ name: "chat" }] } as any;
+        traverseFlow(createFlow(node), new SizingVisitor({ canAddTrigger: true, canAddEventTrigger: true }, false));
+
+        // The Add Trigger tile alone at the top; the channel's slot is one tile row plus room for its caption.
+        const triggerBlock = AGENT_USAGE_ROW_PITCH;
+        const channelSlot = Math.max(AGENT_USAGE_ROW_PITCH, NODE_HEIGHT + AGENT_NODE_TOOL_GAP + DURABLE_CAPTION_HEIGHT);
+        expect(node.viewState.lw).toBe(halfNodeWidth + sideColumnWidth + DURABLE_USAGE_COLUMN_EXTRA_WIDTH);
+        expect(node.viewState.ch).toBe(triggerBlock + DURABLE_LEFT_SECTION_GAP + channelSlot + footerTiles);
     });
 
     it("reserves the wide left column for the Add Trigger tile alone, without growing past the right column", () => {

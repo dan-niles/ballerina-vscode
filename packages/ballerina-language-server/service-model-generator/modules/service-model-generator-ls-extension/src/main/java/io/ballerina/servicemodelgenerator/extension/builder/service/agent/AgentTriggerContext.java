@@ -50,6 +50,8 @@ public record AgentTriggerContext(String emitAlias, String listenerVarName, Stri
     public static final String DURABLE_KIND = "durable";
     public static final String CHAT_CHANNEL_PROPERTY = "chatChannel";
     public static final String DEFAULT_CHAT_CHANNEL = "chat";
+    public static final String EVENT_CHANNEL_PROPERTY = "eventChannel";
+    public static final String EVENT_RESPONSE_PROPERTY = "eventResponse";
     private static final String BALLERINA_ORG = "ballerina";
     private static final String DURABLE_HELPERS_SLOT = "\n{{durableHelpers}}\n";
 
@@ -93,6 +95,20 @@ public record AgentTriggerContext(String emitAlias, String listenerVarName, Stri
 
     public boolean isDurable() {
         return DURABLE_KIND.equals(agentKind);
+    }
+
+    /** The trigger sends data on one of the durable agent's channels instead of running it. */
+    public boolean isEventTrigger() {
+        return isDurable() && !eventChannel().isEmpty();
+    }
+
+    public String eventChannel() {
+        return formValue(EVENT_CHANNEL_PROPERTY).strip();
+    }
+
+    /** The channel's response type; empty for a one-way channel, whose send has nothing to await. */
+    public String eventResponse() {
+        return formValue(EVENT_RESPONSE_PROPERTY).strip();
     }
 
     // A chat turn: the AI agent's run keyed by session, or the durable agent's turn on its session's instance.
