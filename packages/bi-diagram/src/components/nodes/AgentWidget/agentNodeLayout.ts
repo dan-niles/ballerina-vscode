@@ -76,6 +76,7 @@ export const AGENT_USAGE_COLUMN_WIDTH = NODE_GAP_X + NODE_HEIGHT + LABEL_HEIGHT 
 
 export type AgentUsageOptions = {
     canAddTrigger?: boolean;
+    canAddEventTrigger?: boolean;
 };
 
 export function getAgentNodeUsages(node: FlowNode): AgentUsage[] {
@@ -97,9 +98,19 @@ export function durableChannelSenders(usages: AgentUsage[], channel: string): Ag
     return usages.filter((usage) => usage.channel === channel);
 }
 
-// Sender rows per left circle in the widget's circle order: the human tasks (none) first, then each channel's callers.
-export function durableLeftSenders(humanTasks: number, events: { name: string }[], usages: AgentUsage[]): number[] {
-    return [...Array<number>(humanTasks).fill(0), ...events.map((event) => durableUsageRowCount(durableChannelSenders(usages, event.name)))];
+// The sender column opens only for real callers; a channel's Add Trigger tile alone fits beside its circle.
+export function durableHasSenders(events: { name: string }[], usages: AgentUsage[]): boolean {
+    return events.some((event) => durableChannelSenders(usages, event.name).length > 0);
+}
+
+// Rows beside a channel's circle: its callers, "+N more", and the Add Trigger tile when the page offers one.
+export function durableChannelRows(usages: AgentUsage[], channel: string, canAddTrigger: boolean): number {
+    return durableUsageRowCount(durableChannelSenders(usages, channel)) + (canAddTrigger ? 1 : 0);
+}
+
+// Rows per left circle in the widget's circle order: the human tasks (none) first, then each channel's rows.
+export function durableLeftSenders(humanTasks: number, events: { name: string }[], usages: AgentUsage[], canAddTrigger = false): number[] {
+    return [...Array<number>(humanTasks).fill(0), ...events.map((event) => durableChannelRows(usages, event.name, canAddTrigger))];
 }
 
 // Rows the durable box's left column gives to callers: the visible usages plus the "+N more" line.
@@ -122,6 +133,10 @@ export function durableLeftColumnWidth(sideColumnWidth: number, triggerRows: num
 
 export function canAddTrigger(options?: AgentUsageOptions): boolean {
     return Boolean(options?.canAddTrigger);
+}
+
+export function canAddEventTrigger(options?: AgentUsageOptions): boolean {
+    return Boolean(options?.canAddEventTrigger);
 }
 
 // Trigger rows: the visible callers, the "+N more" line, and the Add Trigger tile when the page offers one.

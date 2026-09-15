@@ -1378,4 +1378,85 @@ public class AgentTriggerGenerationTest {
         Assert.assertEquals(durable.getProperties().get(AGENT_KIND_PROPERTY).getValue(), "durable");
         Assert.assertNull(plain.getProperties().get("chatChannel"), "an AI agent's form has no channel to ask for");
     }
+
+    // --- Durable agents: an HTTP trigger on a data event sends the request to a running instance. ---
+
+    private static GetServiceInitModelContext eventContext(String channel, String response) {
+        return new GetServiceInitModelContext("ballerina", "http", "http", "1.0.0", null, null, null, false,
+                "claimAgent", null, "durable", channel, response);
+    }
+
+    /** The event trigger's form as the builder hands it out, with the endpoint shaped the way the wizard seeds it. */
+    private ServiceInitModel eventForm(String channel, String response, Function shaped) {
+        ServiceInitModel form = new AgentTriggerServiceBuilder().getServiceInitModel(eventContext(channel, response));
+        form.getProperties().get("basePath").setValue("/claim-agent");
+        form.setResource(shaped);
+        return form;
+    }
+
+    private static Function eventEndpoint(String path, List<Parameter> parameters, String statusCode, String body) {
+        FunctionReturnType returnType = new FunctionReturnType(
+                new Value.ValueBuilder().enabled(true).value("").build());
+        returnType.setResponses(List.of(new HttpResponse(
+                new Value.ValueBuilder().enabled(true).value(statusCode).build(),
+                new Value.ValueBuilder().enabled(true).value(body).build(),
+                null, null, new Value.ValueBuilder().enabled(false).value("").build(), null, true, true)));
+        return new Function.FunctionBuilder()
+                .kind("RESOURCE")
+                .accessor(new Value.ValueBuilder().enabled(true).value("POST").build())
+                .name(new Value.ValueBuilder().enabled(true).value(path).build())
+                .parameters(new ArrayList<>(parameters))
+                .returnType(returnType)
+                .enabled(true)
+                .build();
+    }
+
+    private String generateForEvent(String channel, String response, Function shaped) {
+        return render(AgentTriggerServiceBuilder.buildEdits(eventForm(channel, response, shaped), null,
+                channel("ballerina", "http"), rootOf("\n"), "main.bal"));
+    }
+
+    @Test
+    public void testEventTriggerSendsTheRequestToTheInstanceAndAwaitsTheReply() {
+        String src = generateForEvent("chat", "string", eventEndpoint("[string instanceId]/chat",
+                List.of(param("PAYLOAD", "string", "payload")), "201", "string"));
+
+        Assert.assertTrue(src.contains("resource function post [string instanceId]/chat(@http:Payload string payload)"
+                + " returns error|string {"), "the endpoint keeps the shape the form gave it: " + src);
+        Assert.assertTrue(src.contains("string token = check claimAgent.sendData(instanceId, \"chat\", payload);"),
+                "the payload is sent on the channel to the instance the path names: " + src);
+        Assert.assertTrue(src.contains("string result = check claimAgent.waitForDataResult(instanceId, token);")
+                && src.contains("return result;"), "the channel's reply is awaited and returned: " + src);
+        Assert.assertFalse(src.contains(".run("), "a data event never starts an instance: " + src);
+        Assert.assertFalse(src.contains("string prompt"), "a data event carries the request, not a prompt: " + src);
+    }
+
+    @Test
+    public void testEventTriggerOnAOneWayChannelOnlyAcknowledges() {
+        String src = generateForEvent("shipping", null, eventEndpoint("[string instanceId]/shipping",
+                List.of(param("PAYLOAD", "string", "payload")), "202", ""));
+
+        Assert.assertTrue(src.contains("_ = check claimAgent.sendData(instanceId, \"shipping\", payload);"),
+                "a one-way channel's correlation token is discarded, as the compiler plugin requires: " + src);
+        Assert.assertTrue(src.contains("return http:ACCEPTED;"), "the send is acknowledged: " + src);
+        Assert.assertFalse(src.contains("waitForDataResult"), "a one-way channel has no reply to await: " + src);
+    }
+
+    @Test
+    public void testEventTriggerFormCarriesTheChannelAndAsksForNoInstructions() {
+        ServiceInitModel form = new AgentTriggerServiceBuilder().getServiceInitModel(eventContext("chat", "string"));
+
+        Assert.assertEquals(form.getProperties().get("eventChannel").getValue(), "chat");
+        Assert.assertEquals(form.getProperties().get("eventResponse").getValue(), "string");
+        Assert.assertNull(form.getProperties().get("instructions"), "the request is sent as-is; nothing to instruct");
+    }
+
+    @Test
+    public void testEventTriggerRefusesAnEndpointWithoutAnInstancePathParameter() {
+        GenerationRefusedException thrown = Assert.expectThrows(GenerationRefusedException.class,
+                () -> generateForEvent("chat", "string", eventEndpoint(".",
+                        List.of(param("PAYLOAD", "string", "payload")), "201", "string")));
+
+        Assert.assertTrue(thrown.getMessage().contains("path parameter"), thrown.getMessage());
+    }
 }

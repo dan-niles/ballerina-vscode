@@ -21,7 +21,7 @@ import styled from "@emotion/styled";
 import { css } from "@emotion/react";
 import { DiagramEngine, PortWidget } from "@projectstorm/react-diagrams-core";
 import { Icon, ThemeColors, getAIModuleIcon } from "@wso2/ui-toolkit";
-import { NodeIcon } from "@wso2/bi-diagram";
+import { DurableAgentIcon, NodeIcon } from "@wso2/bi-diagram";
 import { resolveBrandIconFromUrl } from "@wso2/ballerina-core";
 import { AgentCardNodeModel, inletPortName } from "./AgentCardNodeModel";
 import {
@@ -61,7 +61,7 @@ const HIGH_CONTRAST_HOVER_OUTLINE = css`
 `;
 
 // The instance diagram hangs the model and memory off the node's right edge; the card gives them a rail.
-const Card = styled.div<{ hovered: boolean; orphan: boolean; receded: boolean; readonly?: boolean; railless?: boolean }>`
+const Card = styled.div<{ hovered: boolean; receded: boolean; readonly?: boolean; railless?: boolean }>`
     display: grid;
     grid-template-columns: ${(props) => (props.railless ? "1fr" : `1fr ${RAIL_WIDTH}px`)};
     gap: 12px;
@@ -71,8 +71,8 @@ const Card = styled.div<{ hovered: boolean; orphan: boolean; receded: boolean; r
     padding: ${(props) => (props.railless ? "14px 16px 12px" : "14px 10px 12px 16px")};
     border-radius: 10px;
     border-width: ${NODE_BORDER_WIDTH}px;
-    border-style: ${(props) => (props.orphan ? "dashed" : "solid")};
-    border-color: ${(props) => (props.hovered ? ThemeColors.HIGHLIGHT : props.orphan ? WARNING_COLOR : NODE_BORDER_COLOR)};
+    border-style: solid;
+    border-color: ${(props) => (props.hovered ? ThemeColors.HIGHLIGHT : NODE_BORDER_COLOR)};
     ${(props) => (props.hovered ? HIGH_CONTRAST_HOVER_OUTLINE : "")}
     background-color: ${(props) => (props.hovered ? NODE_BG_HOVER_COLOR : ThemeColors.SURFACE_DIM)};
     box-shadow: ${(props) => (props.hovered ? NODE_HOVER_GLOW : "none")};
@@ -683,7 +683,6 @@ export function AgentCardNodeWidget(props: AgentCardNodeWidgetProps) {
     return (
         <Card
             hovered={isHovered}
-            orphan={node.orphan}
             receded={focus !== undefined && !focus.nodes.has(model.getID())}
             readonly={readonly}
             railless={isWorkflow}
@@ -713,7 +712,7 @@ export function AgentCardNodeWidget(props: AgentCardNodeWidgetProps) {
             {durable && <Inlets node={node} model={model} engine={engine} vertical={vertical} onInlet={onInlet} offInlet={offInlet} />}
             <Body>
                 <HeaderRow>
-                    <NodeIcon type={isWorkflow ? "WORKFLOW_RUN" : durable ? "DURABLE_AGENT_RUN" : "AGENT"} size={24} />
+                    {isWorkflow ? <NodeIcon type="WORKFLOW_RUN" size={24} /> : durable ? <DurableAgentIcon size={24} /> : <NodeIcon type="AGENT" size={24} />}
                     <HeaderText title={node.name}>
                         <Eyebrow>{node.typeName}</Eyebrow>
                         <Name>{node.name}</Name>

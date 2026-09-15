@@ -135,6 +135,7 @@ export function PinBanner({ row, isolated, onIsolate, onExitIsolation, onUnpin }
                         </TextButton>
                         <TextButton type="button" title="Clear the pin and fit the whole canvas" onClick={onUnpin}>
                             Unpin
+                            <Kbd>esc</Kbd>
                         </TextButton>
                     </>
                 )}

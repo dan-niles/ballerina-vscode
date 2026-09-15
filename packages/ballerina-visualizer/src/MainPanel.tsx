@@ -665,6 +665,7 @@ const MainPanel = () => {
                                     agentName={value?.artifactInfo.agentName}
                                     agentOrgName={value?.artifactInfo.agentOrgName}
                                     agentKind={value?.artifactInfo.agentKind}
+                                    agentEvent={value?.artifactInfo.agentEvent}
                                 />
                             );
                             break;
