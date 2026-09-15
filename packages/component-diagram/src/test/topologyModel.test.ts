@@ -260,8 +260,31 @@ describe("buildTopology", () => {
         expect(graph.edges.map((edge) => edge.sourceId)).toEqual([triggerId, triggerId]);
     });
 
-    // A chain would have to come back to the same card and would lose a step, so the whole handler fans.
-    it("fans a handler that calls one agent twice, even with no construct around the calls", () => {
+    // Inside a loop the body still runs in order on every iteration, so a straight-line body chains (evaluator_optimizer).
+    it("chains a handler whose calls sit inside a loop but nothing else, and still records the loop", () => {
+        const generator = agentConnection("g", "generatorAgent", AGENTS_BAL, 1);
+        const evaluator = agentConnection("e", "evaluatorAgent", AGENTS_BAL, 5);
+        const loop = { kind: "while" as const, id: "W", label: "score < 90" };
+        const slogan = resourceFn("post", "slogan", SERVICES_BAL, 1, ["g", "e"], [
+            { connection: "g", line: 3, groups: [loop] },
+            { connection: "e", line: 4, groups: [loop] },
+        ]);
+        const svc = service(SERVICES_BAL, 1, "http:Service", "/studio", ["g", "e"], [slogan]);
+        const graph = buildTopology({
+            model: modelOf([generator, evaluator], [svc]),
+            agents: [artifact("generatorAgent", AGENTS_BAL, 1), artifact("evaluatorAgent", AGENTS_BAL, 5)],
+        });
+
+        const triggerId = graph.entries[0].id;
+        expect(graph.handlers[0]).toMatchObject({ ordered: true, logic: ["loop"] });
+        expect(graph.edges.map((edge) => [edge.sourceId, edge.targetId])).toEqual([
+            [triggerId, agentId(AGENTS_BAL, 1)],
+            [agentId(AGENTS_BAL, 1), agentId(AGENTS_BAL, 5)],
+        ]);
+    });
+
+    // The chain follows each agent's first call; a repeat is a fact about a call site and is drawn nowhere.
+    it("chains a handler that calls one agent twice along the first calls, and draws the repeat nowhere", () => {
         const notify = agentConnection("not", "notifyAgent", AGENTS_BAL, 1);
         const refund = agentConnection("ref", "refundAgent", AGENTS_BAL, 5);
         const twice = resourceFn("post", "twice", SERVICES_BAL, 1, ["not", "ref"], [
@@ -276,10 +299,36 @@ describe("buildTopology", () => {
         });
 
         const triggerId = graph.entries[0].id;
-        expect(graph.handlers[0]).toMatchObject({ ordered: false, logic: [] });
+        expect(graph.handlers[0]).toMatchObject({ ordered: true, logic: [] });
         expect(graph.edges.map((edge) => [edge.sourceId, edge.targetId])).toEqual([
             [triggerId, agentId(AGENTS_BAL, 1)],
-            [triggerId, agentId(AGENTS_BAL, 5)],
+            [agentId(AGENTS_BAL, 1), agentId(AGENTS_BAL, 5)],
+        ]);
+    });
+
+    // evaluator_optimizer's /translate: translator, quality, then translator again inside an `if`. The first calls
+    // sit under the loop alone, so quality runs after translator on every pass; only the retry is conditional.
+    it("chains the first calls when only a repeat sits under a branch", () => {
+        const translator = agentConnection("t", "translatorAgent", AGENTS_BAL, 1);
+        const quality = agentConnection("q", "qualityAgent", AGENTS_BAL, 5);
+        const loop = { kind: "foreach" as const, id: "L", label: "language in languages" };
+        const retry = { kind: "if" as const, id: "I", label: "score < 90" };
+        const translate = resourceFn("post", "translate", SERVICES_BAL, 1, ["t", "q"], [
+            { connection: "t", line: 3, groups: [loop] },
+            { connection: "q", line: 4, groups: [loop] },
+            { connection: "t", line: 6, groups: [loop, retry] },
+        ]);
+        const svc = service(SERVICES_BAL, 1, "http:Service", "/studio", ["t", "q"], [translate]);
+        const graph = buildTopology({
+            model: modelOf([translator, quality], [svc]),
+            agents: [artifact("translatorAgent", AGENTS_BAL, 1), artifact("qualityAgent", AGENTS_BAL, 5)],
+        });
+
+        const triggerId = graph.entries[0].id;
+        expect(graph.handlers[0]).toMatchObject({ ordered: true, logic: ["branch", "loop"] });
+        expect(graph.edges.map((edge) => [edge.sourceId, edge.targetId])).toEqual([
+            [triggerId, agentId(AGENTS_BAL, 1)],
+            [agentId(AGENTS_BAL, 1), agentId(AGENTS_BAL, 5)],
         ]);
     });
 

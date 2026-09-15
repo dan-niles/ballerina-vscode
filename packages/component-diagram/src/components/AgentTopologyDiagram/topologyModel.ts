@@ -394,8 +394,8 @@ interface Sent {
 interface Handler {
     entryId: string;
     node: TopologyHandler;
-    // Agent node ids in source order, repeats kept -- a repeat is what makes a handler unchainable.
-    calls: string[];
+    // Each agent's first call in source order: the spine a chain follows. Repeats are not drawn.
+    spine: string[];
     // Agents the handler reaches only through a helper, so no call site is known.
     reached: string[];
     sends: Sent[];
@@ -415,10 +415,21 @@ function logicIn(calls: CDAgentCall[]): HandlerLogic[] {
     return LOGIC_ORDER.filter((kind) => found.has(kind));
 }
 
-// A chain says "then this one runs", so it may only be drawn where that is true of every step: no construct
-// around any call, and no agent called twice (a chain would have to revisit a node and would lose a step).
-function chainable(handler: Handler): boolean {
-    return handler.node.logic.length === 0 && new Set(handler.calls).size === handler.calls.length;
+// A branch or fork around a spine call makes "B runs after A" untrue; a loop or a repeat only adds runs.
+function underAlternative(call: CDAgentCall): boolean {
+    return (call.groups ?? []).some((group) => logicOf(group.kind) !== "loop");
+}
+
+function spineOf(calls: CDAgentCall[], uuidToNodeId: Map<string, string>): CDAgentCall[] {
+    const seen = new Set<string>();
+    return (calls ?? []).filter((call) => {
+        const id = uuidToNodeId.get(call.connection);
+        if (id === undefined || seen.has(id)) {
+            return false;
+        }
+        seen.add(id);
+        return true;
+    });
 }
 
 function chainPairs(calls: string[]): string[] {
@@ -431,7 +442,7 @@ function resolveOrderConflicts(handlers: Handler[]): void {
     const owners = new Map<string, Handler[]>();
     handlers.forEach((handler) => {
         if (handler.node.ordered) {
-            chainPairs(handler.calls).forEach((pair) => owners.set(pair, [...(owners.get(pair) ?? []), handler]));
+            chainPairs(handler.spine).forEach((pair) => owners.set(pair, [...(owners.get(pair) ?? []), handler]));
         }
     });
     owners.forEach((holders, pair) => {
@@ -480,7 +491,7 @@ function mergeDuplicateEdges(edges: TopologyEdge[]): TopologyEdge[] {
 function handlerEdges(handler: Handler): TopologyEdge[] {
     const { entryId } = handler;
     const triggerId = handler.node.id;
-    const steps = [...new Set(handler.calls)];
+    const steps = handler.spine;
     const fromRow = (agentId: string, order: number) => rowEdge(entryId, triggerId, agentId, { triggerId, order });
     const drawn = handler.node.ordered
         ? steps.map((agentId, index) => (index === 0 ? fromRow(agentId, 1) : edge(steps[index - 1], agentId, "trigger", { triggerId, order: index + 1 })))
@@ -545,6 +556,7 @@ function buildHandler(
 ): Handler {
     const agentUuids = triggeredAgentUuids(fn, uuidToNodeId, delegated);
     const sends = sentChannels(fn, uuidToNodeId);
+    const spine = spineOf(fn.agentCalls, uuidToNodeId);
     const node: TopologyHandler = {
         id: agentNodeId(filePath, fn.location.startLine.line),
         label: labels.label,
@@ -553,19 +565,17 @@ function buildHandler(
         position: fn.location.startLine,
         endPosition: fn.location.endLine,
         logic: logicIn(fn.agentCalls),
-        ordered: false,
+        ordered: !spine.some(underAlternative),
         sends: sends.length ? [...new Set(sends.map((send) => send.channel))] : undefined,
         wired: agentUuids.length > 0 || sends.length > 0,
     };
-    const handler: Handler = {
+    return {
         entryId,
         node,
-        calls: (fn.agentCalls ?? []).map((call) => uuidToNodeId.get(call.connection)).filter((id): id is string => id !== undefined),
+        spine: spine.map((call) => uuidToNodeId.get(call.connection) as string),
         reached: agentUuids.map((uuid) => uuidToNodeId.get(uuid)),
         sends,
     };
-    node.ordered = chainable(handler);
-    return handler;
 }
 
 // One card per service with every handler as a row, the ones that run agents first, so the card shows the whole
