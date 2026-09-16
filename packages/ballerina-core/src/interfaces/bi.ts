@@ -21,7 +21,7 @@ import { LinePosition } from "./common";
 import { Diagnostic as VSCodeDiagnostic } from "vscode-languageserver-types";
 import { ValueTypeConstraint } from "../rpc-types/ai-agent/interfaces";
 import { Type } from "./extended-lang-client";
-import { ValidationResult, ValidationRule } from "./service";
+import { AgentTriggerDeletionScope, ValidationResult, ValidationRule } from "./service";
 
 export type { NodePosition };
 
@@ -156,6 +156,56 @@ export type AgentNodeInfo = {
     tools?: ToolData[];
     modelProvider?: AgentModelProviderInfo;
     memory?: AgentMemoryInfo;
+    usages?: AgentUsage[];
+    animateUsages?: boolean;
+};
+
+export type AgentUsage = {
+    label: string; // "POST /chat" or the function name
+    serviceLabel?: string; // "/mathService"
+    serviceName?: string; // raw path, matched against a trace's entrypoint
+    functionName?: string; // raw path or remote function name, matched against a trace's entrypoint
+    type?: string; // "http:Service", "automation", ...
+    typeLabel?: string; // "GraphQL Service", "AI Chat Service", ...
+    icon?: string;
+    documentUri: string;
+    position: NodePosition;
+    trigger?: AgentUsageTrigger;
+    tryIt?: AgentUsageTryIt;
+};
+
+export type AgentUsageTryIt = {
+    basePath: string;
+    listener: string;
+    resource?: AgentUsageTryItResource;
+};
+
+export type AgentUsageTryItResource = {
+    method: string;
+    path: string;
+};
+
+export type AgentUsageTrigger = {
+    serviceName: string;
+    documentUri: string;
+    position: NodePosition;
+    listeners: AgentUsageTriggerListener[];
+    entryPoint?: AgentUsageTriggerEntryPoint;
+    orphansService?: boolean;
+    scope?: AgentTriggerDeletionScope;
+    helpers?: AgentUsageTriggerListener[];
+};
+
+export type AgentUsageTriggerEntryPoint = {
+    label: string;
+    documentUri: string;
+    position: NodePosition;
+};
+
+export type AgentUsageTriggerListener = {
+    symbol: string;
+    documentUri: string;
+    position: NodePosition;
 };
 
 export type AgentModelProviderInfo = {

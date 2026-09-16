@@ -16,52 +16,116 @@
  * under the License.
  */
 
-// EnumEditor selection behaviour: which member the dropdown presents as the
-// current one, and the entries it offers to choose from. The backend labels the
-// options by their enum member name and puts the declared default of the
-// parameter in `placeholder` (or clears it when the default resolves to none of
-// the members), which is the contract these tests pin down.
-
 import React from "react";
 import { act, render } from "@testing-library/react";
 import type { FormField } from "../components/Form/types";
 import { EnumEditor } from "../components/editors/MultiModeExpressionEditor/EnumEditor/EnumEditor";
 
-const NONE_SELECTED = "__none__";
+// The empty-selection option must never read as a chosen value: a required enum whose
+// placeholder is the connector's default literal (e.g. "\"codex-mini-latest\"") looked
+// selected while the form value was still empty, so Save stayed disabled.
+describe("EnumEditor empty selection", () => {
+    const enumField = (overrides: Partial<FormField>): FormField =>
+        ({
+            key: "modelType",
+            label: "Model Type",
+            type: "SINGLE_SELECT",
+            optional: false,
+            editable: true,
+            enabled: true,
+            documentation: "",
+            value: "",
+            ...overrides,
+        } as unknown as FormField);
 
-const items = [
-    { id: '"chat_completions"', content: "CHAT_COMPLETIONS", value: '"chat_completions"' },
-    { id: '"responses"', content: "RESPONSES", value: '"responses"' }
-];
+    const items = [
+        { id: "1", content: "codex-mini-latest", value: '"codex-mini-latest"' },
+        { id: "2", content: "gpt-4o", value: '"gpt-4o"' },
+    ];
 
-const enumField = (placeholder?: string): FormField =>
-    ({
-        key: "apiType",
-        label: "API Type",
-        type: "SINGLE_SELECT",
-        placeholder,
-        optional: true,
-        editable: true,
-        enabled: true,
-        documentation: ""
-    } as unknown as FormField);
+    it("labels the empty option 'No Selection' for a required field with a default-value placeholder", () => {
+        const { container } = render(
+            <EnumEditor
+                value=""
+                field={enumField({ placeholder: '"codex-mini-latest"' })}
+                onChange={jest.fn()}
+                items={items}
+            />
+        );
+        const options = Array.from(container.querySelectorAll("vscode-option"));
+        const noneOption = options.find((option) => option.getAttribute("value") === "__none__");
+        expect(noneOption?.textContent).toBe("No Selection");
+    });
 
-const renderEditor = (value: string, placeholder?: string) => {
-    const onChange = jest.fn();
-    const { container } = render(
-        <EnumEditor value={value} field={enumField(placeholder)} onChange={onChange} items={items} />
-    );
-    const dropdown = container.querySelector("vscode-dropdown");
-    const options = Array.from(container.querySelectorAll("vscode-option"));
-    return {
-        onChange,
-        contents: options.map(option => option.textContent?.trim()),
-        values: options.map(option => option.getAttribute("value")),
-        selected: (dropdown as HTMLElement & { value?: string })?.value ?? dropdown?.getAttribute("value")
-    };
-};
+    it("keeps a descriptive placeholder as the empty option for an optional field", () => {
+        const { container } = render(
+            <EnumEditor
+                value=""
+                field={enumField({ optional: true, placeholder: "(default)" })}
+                onChange={jest.fn()}
+                items={items}
+            />
+        );
+        const options = Array.from(container.querySelectorAll("vscode-option"));
+        const noneOption = options.find((option) => option.getAttribute("value") === "__none__");
+        expect(noneOption?.textContent).toBe("(default)");
+    });
 
+    it("unwraps a Ballerina string literal placeholder on an optional field", () => {
+        const { container } = render(
+            <EnumEditor
+                value=""
+                field={enumField({ optional: true, placeholder: '"2.0"' })}
+                onChange={jest.fn()}
+                items={items}
+            />
+        );
+        const options = Array.from(container.querySelectorAll("vscode-option"));
+        const noneOption = options.find((option) => option.getAttribute("value") === "__none__");
+        expect(noneOption?.textContent).toBe("2.0");
+    });
+});
+
+// EnumEditor selection behaviour: which member the dropdown presents as the
+// current one, and the entries it offers to choose from. The backend labels the
+// options by their enum member name and puts the declared default of the
+// parameter in `placeholder` (or clears it when the default resolves to none of
+// the members), which is the contract these tests pin down.
 describe("EnumEditor", () => {
+    const NONE_SELECTED = "__none__";
+
+    const items = [
+        { id: '"chat_completions"', content: "CHAT_COMPLETIONS", value: '"chat_completions"' },
+        { id: '"responses"', content: "RESPONSES", value: '"responses"' }
+    ];
+
+    const enumField = (placeholder?: string): FormField =>
+        ({
+            key: "apiType",
+            label: "API Type",
+            type: "SINGLE_SELECT",
+            placeholder,
+            optional: true,
+            editable: true,
+            enabled: true,
+            documentation: ""
+        } as unknown as FormField);
+
+    const renderEditor = (value: string, placeholder?: string) => {
+        const onChange = jest.fn();
+        const { container } = render(
+            <EnumEditor value={value} field={enumField(placeholder)} onChange={onChange} items={items} />
+        );
+        const dropdown = container.querySelector("vscode-dropdown");
+        const options = Array.from(container.querySelectorAll("vscode-option"));
+        return {
+            onChange,
+            contents: options.map(option => option.textContent?.trim()),
+            values: options.map(option => option.getAttribute("value")),
+            selected: (dropdown as HTMLElement & { value?: string })?.value ?? dropdown?.getAttribute("value")
+        };
+    };
+
     it("INVARIANT: offers the empty selection alongside the members when a default is declared", () => {
         const { contents } = renderEditor("", '"chat_completions"');
         expect(contents).toEqual(["CHAT_COMPLETIONS", "RESPONSES", "No Selection"]);

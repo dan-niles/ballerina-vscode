@@ -32,6 +32,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 jest.mock("@wso2/ballerina-core", () => ({
     __esModule: true,
     TemplateId: { Wildcard: "Wildcard" },
+    ProductMode: { INTEGRATOR: "integrator", AGENT_BUILDER: "agent-builder" },
     // placeholderTags is keyed by Command, so the real fixture needs these to initialise.
     Command: {
         Agent: "Agent", Ask: "Ask", Compact: "Compact", Doc: "Doc", Healthcare: "Healthcare",
@@ -61,8 +62,19 @@ jest.mock("../../../../../components/AgentStatusOrb/shared", () => ({
     __esModule: true,
     Sphere: (): null => null,
     Gloss: (): null => null,
-    ORB_COLORS: { running: [] as string[] },
+    AGENT_BUILDER_ORB_COLORS: { running: [] as string[] },
     ORB_ENERGY: { running: 0 },
+}));
+
+jest.mock("../../../../../components/AgentStatusOrb/orbTheme", () => ({
+    __esModule: true,
+    useOrbColors: (): string[] => [],
+}));
+
+// Reaches @wso2/ballerina-rpc-client, which ships ESM.
+jest.mock("../../../../../hooks/useProductMode", () => ({
+    __esModule: true,
+    useProductMode: (): string => "integrator",
 }));
 
 jest.mock("../../AIChatInput", () => ({

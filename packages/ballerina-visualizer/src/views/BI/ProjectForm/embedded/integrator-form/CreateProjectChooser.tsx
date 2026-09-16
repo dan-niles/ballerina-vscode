@@ -25,6 +25,7 @@ import {
 } from "./shared/ProjectDestinationForm";
 import { LibraryCreationView } from "./LibraryCreationView";
 import { Organization } from "./components";
+import { getProductTerms, projectTypeOptions } from "../../productTerms";
 import { BiWsClient } from "../../../wsManager/WsClient";
 
 interface CreateProjectChooserProps {
@@ -37,6 +38,8 @@ interface CreateProjectChooserProps {
      * is held back, because the answer decides which flow the user is routed into.
      */
     workspaceSupportPending?: boolean;
+    /** Agent builder mode words the integration option for what it builds there. */
+    isAgentBuilder?: boolean;
     /** Exit the whole Create flow (back to the welcome view). */
     onBack?: () => void;
 }
@@ -58,11 +61,13 @@ export function CreateProjectChooser({
     biWsClient,
     ballerinaUnavailable,
     workspaceSupportPending,
+    isAgentBuilder,
     onBack,
 }: CreateProjectChooserProps) {
     const { wsClient } = useVisualizerContext();
     const { authState } = useCloudContext();
     const organizations = authState?.userInfo?.organizations as Organization[] | undefined;
+    const terms = getProductTerms(isAgentBuilder);
 
     /**
      * Integration route: create the project and an EMPTY integration package inside it,
@@ -90,13 +95,16 @@ export function CreateProjectChooser({
     return (
         <CreateFlowShell
             title="Create a Project"
-            subtitle="Organize everything you build with WSO2 Integrator."
+            subtitle={`A project helps you organize your ${isAgentBuilder ? "agentic " : ""}integrations and libraries.`}
             onBack={onBack}
         >
             <ProjectDestinationForm
                 wsClient={wsClient}
                 organizations={organizations}
                 showStartingPoint={true}
+                projectTypeOptions={projectTypeOptions(terms)}
+                integrationNameLabel={terms.integrationNameLabel}
+                integrationNamePlaceholder={terms.integrationNamePlaceholder}
                 renderLibraryRoute={({ projectContext, canProceed }) => (
                     <LibraryCreationView
                         embedded
@@ -105,7 +113,7 @@ export function CreateProjectChooser({
                         isCreateDisabled={!canProceed || workspaceSupportPending}
                     />
                 )}
-                submitLabel="Create"
+                submitLabel={terms.createButtonLabel}
                 submittingLabel="Creating..."
                 submitErrorPrefix="Failed to create the integration."
                 submitDisabled={ballerinaUnavailable || workspaceSupportPending}

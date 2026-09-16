@@ -311,7 +311,8 @@ export function activate(context: BallerinaExtension) {
     // After the language server and project are fully ready, check whether a
     // Create Integration wizard artifact and/or a migration AI enhancement was
     // scheduled before the last folder reload. The wizard artifact must run
-    // first so it wins the webview navigation race.
+    // first so it wins the webview navigation race; the agent builder landing
+    // follows it and stands down whenever either of them already navigated.
     const service = StateMachine.service();
     const subscription = service.subscribe((state) => {
         if (state.value === "extensionReady" && state.changed) {

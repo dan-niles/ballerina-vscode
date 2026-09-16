@@ -19,6 +19,7 @@
 import { DIRECTORY_MAP, EVENT_TYPE, FOCUS_FLOW_DIAGRAM_VIEW, HistoryEntry, isSamePath, MACHINE_VIEW, ProjectStructure, ProjectStructureArtifactResponse, ProjectStructureResponse, SyntaxTreeResponse, UpdatedArtifactsResponse, VisualizerLocation } from "@wso2/ballerina-core";
 import { NodePosition, STKindChecker, STNode, traversNode } from "@wso2/syntax-tree";
 import { StateMachine, openView } from "../stateMachine";
+import { ProductMode } from "./config";
 import { Uri } from "vscode";
 import { UIDGenerationVisitor } from "./history/uid-generation-visitor";
 import { FindNodeByUidVisitor } from "./history/find-node-by-uid";
@@ -107,6 +108,11 @@ export function resolveCreateLandingOverride(
  * contents by path, so redirecting to one without a path would replace the list with a view
  * that can never finish loading.
  */
+
+export function isEmptyPackage(project: ProjectStructure): boolean {
+    return Object.values(project.directoryMap).every((artifacts) => !artifacts?.length);
+}
+
 export function getSoleIntegration(projectStructure?: ProjectStructureResponse): ProjectStructure | undefined {
     const projects = projectStructure?.projects ?? [];
     if (projects.length !== 1 || projects[0].isLibrary || !projects[0].projectPath) {
@@ -139,14 +145,18 @@ export function resolveSingleIntegrationOverride(
     if (viewLocation.projectPath || !context.workspacePath) {
         return undefined;
     }
-    const isBareNavigation =
-        !viewLocation.view &&
-        !context.projectPath &&
-        (!viewLocation.position || "groupId" in viewLocation.position);
+    const namesNoTarget = !viewLocation.view && (!viewLocation.position || "groupId" in viewLocation.position);
+    const isBareNavigation = namesNoTarget && !context.projectPath;
+    const agentBuilderMode = StateMachine.productMode() === ProductMode.AGENT_BUILDER;
     if (viewLocation.view !== MACHINE_VIEW.WorkspaceOverview && !isBareNavigation) {
-        return undefined;
+        if (!agentBuilderMode || !namesNoTarget) {
+            return undefined;
+        }
     }
     const soleIntegration = getSoleIntegration(context.projectStructure);
+    if (!soleIntegration) {
+        return undefined;
+    }
     return soleIntegration
         ? { view: MACHINE_VIEW.PackageOverview, projectPath: soleIntegration.projectPath }
         : undefined;
@@ -551,6 +561,17 @@ function findViewByArtifact(
                     dataMapperDepth: 0
                 };
             case DIRECTORY_MAP.AGENT:
+                if (StateMachine.productMode() === ProductMode.AGENT_BUILDER) {
+                    return {
+                        location: {
+                            view: MACHINE_VIEW.PackageOverview,
+                            projectPath,
+                            documentUri: dir.path,
+                            position: dir.position,
+                        },
+                        dataMapperDepth: 0
+                    };
+                }
                 return {
                     location: {
                         view: MACHINE_VIEW.BIDiagram,

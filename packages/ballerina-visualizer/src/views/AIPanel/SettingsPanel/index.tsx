@@ -24,6 +24,7 @@ import { AIChatView, DangerActionButton, PrimaryActionButton, SuccessActionButto
 import { AIMachineEventType, AgentsMdFileInfoDTO, McpServerStatusDTO, SkillEntry } from "@wso2/ballerina-core";
 import { CustomizeRow, CustomizeEntry } from "./CustomizeRow";
 import type { PanelRoute } from "../components/AIChat";
+import { useShortAssistantName } from "../../../hooks/useProductMode";
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 
@@ -210,6 +211,7 @@ interface SettingsPanelProps {
 }
 
 export const SettingsPanel = (props: SettingsPanelProps) => {
+    const shortName = useShortAssistantName();
     const { rpcClient } = useRpcContext();
 
     const [copilotAuthorized, setCopilotAuthorized] = React.useState(false);
@@ -352,7 +354,7 @@ export const SettingsPanel = (props: SettingsPanelProps) => {
             <PanelContent>
                 {/* Customize Copilot */}
                 <Section>
-                    <SectionHeader>Customize Copilot</SectionHeader>
+                    <SectionHeader>Customize {shortName}</SectionHeader>
                     <EntryList>
                         {customizeEntries.map(entry => (
                             <CustomizeRow key={entry.id} entry={entry} />

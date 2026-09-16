@@ -16,7 +16,8 @@
  * under the License.
  */
 
-import { SemanticVersion, PackageTomlValues, SCOPE, WorkspaceTomlValues, ProjectInfo, isSamePath } from '@wso2/ballerina-core';
+import { SemanticVersion, PackageTomlValues, SCOPE, WorkspaceTomlValues, ProjectInfo, isSamePath, ProductMode, assistantName, shortAssistantName } from '@wso2/ballerina-core';
+export { ProductMode } from '@wso2/ballerina-core';
 import { BallerinaExtension } from '../core';
 import { WorkspaceConfiguration, workspace, Uri, RelativePattern, extensions } from 'vscode';
 import * as fs from 'fs';
@@ -244,6 +245,27 @@ export function isICPSupported(): boolean {
 
 export function isInDevant(): boolean {
     return !!process.env.CLOUD_STS_TOKEN;
+}
+
+/**
+ * Derived from the environment, which is fixed before the host starts — so this is safe to
+ * call from anywhere, including at module load, and does not need the state machine to be
+ * running. `StateMachine.productMode()` returns the same value from the machine context and
+ * is the more natural read from inside a state-machine flow. Anything other than agent
+ * builder is the ordinary Integrator experience.
+ */
+export function getProductMode(): ProductMode {
+    return process.env.WSO2_PRODUCT_MODE === ProductMode.AGENT_BUILDER
+        ? ProductMode.AGENT_BUILDER
+        : ProductMode.INTEGRATOR;
+}
+
+export function aiAssistantName(): string {
+    return assistantName(getProductMode());
+}
+
+export function aiAssistantShortName(): string {
+    return shortAssistantName(getProductMode());
 }
 
 export async function checkIsBallerinaPackage(uri: Uri): Promise<boolean> {

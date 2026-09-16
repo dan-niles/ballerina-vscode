@@ -31,6 +31,7 @@ import {
     CodeData,
     LinePosition,
     isSamePath,
+    ProductMode,
 } from "@wso2/ballerina-core";
 import { useRpcContext } from "@wso2/ballerina-rpc-client";
 import { BiWsClientProvider } from "./views/BI/wsManager/WsClientContext";
@@ -40,6 +41,8 @@ import styled from "@emotion/styled";
 import { LoadingRing } from "./components/Loader";
 import { WebviewErrorState } from "./components/WebviewErrorState";
 import { useSuppressAgentStatusOrb, viewHidesAgentStatusOrb } from "./components/AgentStatusOrb/shared";
+import { useTraceAnimationBridge } from "./hooks/useTraceAnimationBridge";
+import { fetchProductMode } from "./hooks/useProductMode";
 import { handleRedo, handleUndo } from "./utils/utils";
 import { STKindChecker } from "@wso2/syntax-tree";
 import { URI, Utils } from "vscode-uri";
@@ -210,8 +213,11 @@ const MainPanel = () => {
     const navKeyRef = useRef<number>(0);
     const remountKeyRef = useRef<number>(0);
     const previousNavTargetRef = useRef<string | undefined>(undefined);
+    const agentFocusTargetRef = useRef<string | undefined>(undefined);
+    const agentFocusIdRef = useRef<number>(0);
 
     useSuppressAgentStatusOrb(viewHidesAgentStatusOrb(activeView) || !!viewError);
+    useTraceAnimationBridge();
 
     // Leading edge so an ordinary navigation fetches immediately; trailing kept for bursts.
     const debounceFetchContext = useCallback(
@@ -341,6 +347,24 @@ const MainPanel = () => {
                 } else {
                     switch (value?.view) {
                         case MACHINE_VIEW.PackageOverview: {
+                            if ((await fetchProductMode(rpcClient)) === ProductMode.AGENT_BUILDER) {
+                                const { AgentBuilderOverview } = await import("./views/BI/AgentBuilderOverview");
+                                if (isStaleNavigation()) return;
+                                const agentFocusTarget = value.documentUri && value.position
+                                    ? `${value.documentUri}::${value.position.startLine}`
+                                    : undefined;
+                                if (agentFocusTarget !== agentFocusTargetRef.current) {
+                                    agentFocusTargetRef.current = agentFocusTarget;
+                                    agentFocusIdRef.current += 1;
+                                }
+                                const agentFocus = agentFocusTarget
+                                    ? { path: value.documentUri, startLine: value.position.startLine, requestId: agentFocusIdRef.current }
+                                    : undefined;
+                                setViewComponent(
+                                    <AgentBuilderOverview projectPath={value.projectPath} agentFocus={agentFocus} />
+                                );
+                                break;
+                            }
                             const { PackageOverview } = await import("./views/BI/PackageOverview");
                             if (isStaleNavigation()) return;
                             setViewComponent(
@@ -353,6 +377,12 @@ const MainPanel = () => {
                             break;
                         }
                         case MACHINE_VIEW.WorkspaceOverview: {
+                            if (await rpcClient.getCommonRpcClient().agentBuilderModeEnabled()) {
+                                const { AgentBuilderWorkspaceOverview } = await import("./views/BI/AgentBuilderWorkspaceOverview");
+                                if (isStaleNavigation()) return;
+                                setViewComponent(<AgentBuilderWorkspaceOverview isInDevant={value.isInDevant} />);
+                                break;
+                            }
                             const { WorkspaceOverview } = await import("./views/BI/WorkspaceOverview");
                             if (isStaleNavigation()) return;
                             setViewComponent(
@@ -640,6 +670,8 @@ const MainPanel = () => {
                                     moduleName={value?.artifactInfo.moduleName}
                                     version={value?.artifactInfo.version}
                                     isLocalRepository={value?.artifactInfo.isLocalRepository}
+                                    agentName={value?.artifactInfo.agentName}
+                                    agentOrgName={value?.artifactInfo.agentOrgName}
                                 />
                             );
                             break;

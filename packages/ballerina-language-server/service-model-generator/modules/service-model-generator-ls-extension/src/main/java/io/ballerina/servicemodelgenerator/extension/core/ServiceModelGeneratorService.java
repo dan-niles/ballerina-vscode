@@ -48,6 +48,7 @@ import io.ballerina.projects.Package;
 import io.ballerina.projects.Project;
 import io.ballerina.servicemodelgenerator.extension.builder.FunctionBuilderRouter;
 import io.ballerina.servicemodelgenerator.extension.builder.ServiceBuilderRouter;
+import io.ballerina.servicemodelgenerator.extension.builder.service.agent.AgentTriggerChannels;
 import io.ballerina.servicemodelgenerator.extension.connector.ConnectorUpgradeAdvisor;
 import io.ballerina.servicemodelgenerator.extension.connector.ConnectorVersionResolver;
 import io.ballerina.servicemodelgenerator.extension.connector.PlatformDependencyEditUtil;
@@ -112,6 +113,7 @@ import io.ballerina.servicemodelgenerator.extension.util.ServiceClassUtil;
 import io.ballerina.servicemodelgenerator.extension.util.TriggerSearchUtil;
 import io.ballerina.servicemodelgenerator.extension.util.TypeCompletionGenerator;
 import io.ballerina.servicemodelgenerator.extension.util.Utils;
+import io.ballerina.servicemodelgenerator.extension.validation.GenerationRefusedException;
 import io.ballerina.servicemodelgenerator.extension.validation.SaveTimeValidator;
 import io.ballerina.servicemodelgenerator.extension.validation.ValidationContext;
 import io.ballerina.servicemodelgenerator.extension.validation.ValidationEngine;
@@ -494,6 +496,7 @@ public class ServiceModelGeneratorService implements ExtendedLanguageServerServi
                     .filter(triggerProperty -> filterTriggers(triggerProperty, request))
                     .map(this::getTriggerBasicInfoByName)
                     .flatMap(Optional::stream)
+                    .map(AgentTriggerChannels::withAgentKind)
                     .toList();
             return new TriggerListResponse(triggerBasicInfoList);
         });
@@ -516,9 +519,13 @@ public class ServiceModelGeneratorService implements ExtendedLanguageServerServi
                     .collect(Collectors.toSet());
             String query = request == null ? null : request.query();
             List<TriggerBasicInfo> centralTriggers = TriggerSearchUtil.searchCentral(
-                    RemoteCentral.getInstance(), query, null, localKeys);
+                    RemoteCentral.getInstance(), query, null, localKeys).stream()
+                    .map(AgentTriggerChannels::withAgentKind)
+                    .toList();
             List<TriggerBasicInfo> localRepositoryTriggers = (request != null && request.includeLocalRepository())
-                    ? TriggerSearchUtil.searchLocalRepository(localKeys)
+                    ? TriggerSearchUtil.searchLocalRepository(localKeys).stream()
+                            .map(AgentTriggerChannels::withAgentKind)
+                            .toList()
                     : List.of();
             return new TriggerListResponse(centralTriggers, localRepositoryTriggers);
         });
@@ -1284,6 +1291,8 @@ public class ServiceModelGeneratorService implements ExtendedLanguageServerServi
                         request.serviceInitModel(), semanticModel.get(), project, workspaceManager,
                         request.filePath(), document.get());
                 return new CommonSourceResponse(textEdits, validations);
+            } catch (GenerationRefusedException e) {
+                return CommonSourceResponse.validationFailure(List.of(e.toValidationResult()));
             } catch (Throwable e) {
                 return new CommonSourceResponse(e);
             }

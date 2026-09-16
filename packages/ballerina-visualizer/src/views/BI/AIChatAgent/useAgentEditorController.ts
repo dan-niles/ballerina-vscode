@@ -19,10 +19,10 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { AgentNodeActions } from "@wso2/bi-diagram";
-import { CodeData, EVENT_TYPE, FlowNode, MACHINE_VIEW, NodeMetadata, NodePosition, ProjectStructureArtifactResponse, SearchNodesQuery, ToolData }
+import { AgentUsage, EVENT_TYPE, FlowNode, MACHINE_VIEW, NodeMetadata, NodePosition, ProjectStructureArtifactResponse, SearchNodesQuery, ToolData }
     from "@wso2/ballerina-core";
 import { useRpcContext } from "@wso2/ballerina-rpc-client";
-import { findFunctionByName } from "../FlowDiagram/utils";
+import { findClassByName, findFunctionByName } from "../FlowDiagram/utils";
 import {
     findAgentScopedNode as findAgentScopedNodeAt,
     refreshAgentNodeLineRange,
@@ -43,6 +43,9 @@ export interface AgentEditorHost {
     onSelectionChange?(node?: FlowNode): void;
     onLoadingChange?(loading: boolean): void;
     onChat?(node: FlowNode): void;
+    onAddTrigger?(node: FlowNode): void;
+    onDeleteTrigger?(usage: AgentUsage, node: FlowNode): void;
+    onTryTrigger?(usage: AgentUsage, node: FlowNode): void;
     onAgentCreated?(): void;
     resolveAgentNode?(node: FlowNode): FlowNode;
 }
@@ -60,6 +63,7 @@ export interface AgentEditorController {
     openView(view: AgentEditorView): void;
     selectAgent(name: string): void;
     close(position?: NodePosition): void;
+    cancel(): void;
     back(): void;
     setBackHandler(handler: (() => void) | null): void;
 }
@@ -86,7 +90,7 @@ export function useAgentEditorController(host: AgentEditorHost): AgentEditorCont
 
     const setLoading = (loading: boolean) => host.onLoadingChange?.(loading);
 
-    const close = useCallback((position?: NodePosition) => {
+    const resetView = useCallback(() => {
         setBackOverride(null);
         setView("NONE");
         setMemoryNode(undefined);
@@ -95,8 +99,16 @@ export function useAgentEditorController(host: AgentEditorHost): AgentEditorCont
         setSelectedAgentName("");
         setAgentNode(undefined);
         host.onSelectionChange?.(undefined);
-        void host.onRefresh(position);
     }, [host]);
+
+    const close = useCallback((position?: NodePosition) => {
+        resetView();
+        void host.onRefresh(position);
+    }, [resetView, host]);
+
+    const cancel = useCallback(() => {
+        resetView();
+    }, [resetView]);
 
     const resolveToolComponent = useCallback(async (toolName: string) => {
         const project = await rpcClient.getBIDiagramRpcClient().getProjectComponents();
@@ -229,6 +241,7 @@ export function useAgentEditorController(host: AgentEditorHost): AgentEditorCont
             return;
         }
 
+        const className = mcpVariable.properties?.toolKitName?.value as string | undefined;
         const mcpVariableFilePath = (await rpcClient.getVisualizerRpcClient().joinProjectPath({
             segments: [mcpVariable.codedata.lineRange.fileName],
         })).filePath;
@@ -237,27 +250,23 @@ export function useAgentEditorController(host: AgentEditorHost): AgentEditorCont
             flowNode: mcpVariable,
         });
 
-        if (mcpVariable.properties?.type?.value === "ai:McpToolKit") {
+        if (mcpVariable.properties?.type?.value === "ai:McpToolKit" || !className) {
             return;
         }
-        const classDefinition = mcpVariable.codedata?.data?.mcpClassDefinition as CodeData | undefined;
-        const classLineRange = classDefinition?.lineRange;
-        if (!classLineRange) {
+        const project = await rpcClient.getBIDiagramRpcClient().getProjectComponents();
+        const classInfo: any = project?.components ? findClassByName(project.components, className) : null;
+        if (!classInfo) {
             return;
         }
-
-        const classFilePath = (await rpcClient.getVisualizerRpcClient().joinProjectPath({
-            segments: [classLineRange.fileName],
-        })).filePath;
         await rpcClient.getBIDiagramRpcClient().deleteByComponentInfo({
-            filePath: classFilePath,
+            filePath: classInfo.filePath,
             component: {
                 name: "CLASS",
-                filePath: classFilePath,
-                startLine: classLineRange.startLine.line,
-                startColumn: classLineRange.startLine.offset,
-                endLine: classLineRange.endLine.line,
-                endColumn: classLineRange.endLine.offset,
+                filePath: classInfo.filePath,
+                startLine: classInfo.startLine,
+                startColumn: classInfo.startColumn,
+                endLine: classInfo.endLine,
+                endColumn: classInfo.endColumn,
             },
         });
     }, [rpcClient]);
@@ -330,6 +339,9 @@ export function useAgentEditorController(host: AgentEditorHost): AgentEditorCont
         onSelectMemoryStore: (node) => void selectMemoryStore(resolve(node)),
         onDeleteMemoryManager: (node) => void deleteMemory(resolve(node)),
         onChatWithAgent: host.onChat && ((node) => host.onChat(resolve(node))),
+        onAddTrigger: host.onAddTrigger && ((node) => host.onAddTrigger(resolve(node))),
+        onDeleteTrigger: host.onDeleteTrigger && ((usage, node) => host.onDeleteTrigger(usage, resolve(node))),
+        onTryTrigger: host.onTryTrigger && ((usage, node) => host.onTryTrigger(usage, resolve(node))),
     }), [activate, deleteMemory, deleteTool, host, openTool, resolve, selectMemory, selectMemoryStore]);
 
     const setBackHandler = useCallback(
@@ -360,6 +372,6 @@ export function useAgentEditorController(host: AgentEditorHost): AgentEditorCont
         view, agentNode, memoryNode, memoryStoreNode, memoryPropertyKey: memoryKeyOf(agentNode),
         selectedTool, selectedAgentName,
         diagramCallbacks, onAgentCreated: host.onAgentCreated,
-        openView, selectAgent, close, back, setBackHandler,
+        openView, selectAgent, close, cancel, back, setBackHandler,
     };
 }

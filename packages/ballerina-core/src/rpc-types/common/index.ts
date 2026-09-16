@@ -60,6 +60,7 @@ export interface CommonRPCAPI {
     experimentalEnabled: () => Promise<boolean>;
     getCopilotOrbTheme: () => Promise<string>;
     additionalTriggerSearchEnabled: () => Promise<boolean>;
+    agentBuilderModeEnabled: () => Promise<boolean>;
     isNPSupported: () => Promise<boolean>;
     getWorkspaceRoot: () => Promise<WorkspaceRootResponse>;
     showErrorMessage: (params: ShowErrorMessageRequest) => void;

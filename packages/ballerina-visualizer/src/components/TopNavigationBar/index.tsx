@@ -22,13 +22,15 @@ import { Icon } from "@wso2/ui-toolkit";
 import { useRpcContext } from "@wso2/ballerina-rpc-client";
 import { DIRECTORY_MAP, EVENT_TYPE, HistoryEntry, isSamePath, MACHINE_VIEW, VisualizerLocation, WorkspaceTypeResponse } from "@wso2/ballerina-core";
 
-const NavContainer = styled.div`
+const NavContainer = styled.div<{ bordered?: boolean }>`
     display: flex;
     align-items: center;
     min-height: 48px;
     padding: 0 16px;
     gap: 8px;
     background-color: var(--vscode-editor-background);
+    border-bottom: ${(props: { bordered?: boolean }) =>
+        props.bordered ? "1px solid var(--vscode-dropdown-border)" : "none"};
     z-index: 1000;
 `;
 
@@ -98,16 +100,18 @@ interface BreadcrumbDisplayItem {
      * Holds a documentUri from the package so we can open its PackageOverview.
      */
     virtualPackageUri?: string;
+    virtualPackageProjectPath?: string;
 }
 
 interface TopNavigationBarProps {
     projectPath: string;
     onBack?: () => void;
     onHome?: () => void;
+    bordered?: boolean;
 }
 
 export function TopNavigationBar(props: TopNavigationBarProps) {
-    const { projectPath, onBack, onHome } = props;
+    const { projectPath, onBack, onHome, bordered } = props;
     const { rpcClient } = useRpcContext();
     const [history, setHistory] = useState<HistoryEntry[]>([]);
     const [workspaceType, setWorkspaceType] = useState<WorkspaceTypeResponse>(null);
@@ -178,11 +182,12 @@ export function TopNavigationBar(props: TopNavigationBarProps) {
         }
 
         // Synthetic workspace package item: navigate directly to that package's overview.
-        if (item.virtualPackageUri) {
+        if (item.virtualPackageProjectPath || item.virtualPackageUri) {
             rpcClient.getVisualizerRpcClient().openView({
                 type: EVENT_TYPE.OPEN_VIEW,
                 location: {
                     view: MACHINE_VIEW.PackageOverview,
+                    projectPath: item.virtualPackageProjectPath,
                     documentUri: item.virtualPackageUri,
                 },
                 resetHistory: true,
@@ -271,7 +276,7 @@ export function TopNavigationBar(props: TopNavigationBarProps) {
     );
 
     return (
-        <NavContainer>
+        <NavContainer bordered={bordered}>
             {onBack && (
                 <IconButton onClick={handleBack}>
                     <Icon name="bi-arrow-back" iconSx={{ color: "var(--vscode-foreground)" }} />
@@ -406,6 +411,7 @@ function buildBreadcrumbItems(
                     label: pkg,
                     historyIndex: null,
                     virtualPackageUri: firstWithPkg.location.documentUri,
+                    virtualPackageProjectPath: firstWithPkg.location.projectPath,
                 });
                 seenLabels.add(pkg);
             }

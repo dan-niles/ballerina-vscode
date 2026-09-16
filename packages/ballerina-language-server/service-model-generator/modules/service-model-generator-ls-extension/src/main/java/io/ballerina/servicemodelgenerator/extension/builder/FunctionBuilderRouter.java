@@ -72,7 +72,7 @@ public class FunctionBuilderRouter {
 
     /** Protocols with dedicated, mature builders that must never fall through to the schema-driven
      * path, regardless of what {@link TriggerModelReader} resolves for them now or in the future. */
-    private static final Set<String> NEVER_SCHEMA_DRIVEN = Set.of(HTTP, GRAPHQL, TCP);
+    private static final Set<String> NEVER_SCHEMA_DRIVEN = Set.of(HTTP, GRAPHQL, TCP, AI);
 
     private static NodeBuilder<Function> getFunctionBuilder(String protocol) {
         return CONSTRUCTOR_MAP.getOrDefault(protocol, DefaultFunctionBuilder::new).get();

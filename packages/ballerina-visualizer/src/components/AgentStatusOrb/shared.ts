@@ -49,6 +49,57 @@ export function loadAnchor(): Anchor {
     return stored && (ANCHORS as readonly string[]).includes(stored) ? (stored as Anchor) : "bottom-right";
 }
 
+/** [base, darker-shade, lighter-shade] from one theme color, mirroring ACCENT_SPHERE. */
+function shadeTriple(base: string): [string, string, string] {
+    return [base, `color-mix(in srgb, ${base} 62%, #000000)`, `color-mix(in srgb, ${base} 72%, #ffffff)`];
+}
+
+/**
+ * One base color per state, so the orb and the composer frame cannot drift apart —
+ * they shade the same base two different ways (`shadeTriple` / `frameTriple`).
+ */
+const STATE_BASE = {
+    "running": "var(--vscode-progressBar-background)",
+    "awaiting-input": "var(--vscode-editorWarning-foreground)",
+    "completed": "var(--vscode-editorGutter-addedBackground)",
+    "error": "var(--vscode-statusBarItem-errorBackground)",
+} as const;
+
+const PRIMARY = "var(--vscode-button-background)";
+
+/** [lighter, base, darker] — the frame reads brightest at its leading edge, unlike a sphere. */
+export function frameTriple(base: string): [string, string, string] {
+    return [`color-mix(in srgb, ${base} 72%, #ffffff)`, base, `color-mix(in srgb, ${base} 78%, #000000)`];
+}
+
+export const ACCENT_FRAME: [string, string, string] = frameTriple(PRIMARY);
+
+export const ACCENT_SPHERE: [string, string, string] = [
+    PRIMARY,
+    `color-mix(in srgb, ${PRIMARY} 62%, #000000)`,
+    `color-mix(in srgb, ${PRIMARY} 72%, #ffffff)`,
+];
+
+export const ACCENT_CORE = `color-mix(in srgb, ${PRIMARY} 70%, transparent)`;
+
+/** Agent Builder's own palette — theme-variable-based; Integrator uses orbTheme's instead. */
+export const AGENT_BUILDER_ORB_COLORS: Record<AgentRunState, [string, string, string]> = {
+    "idle": ACCENT_SPHERE,
+    "running": shadeTriple(STATE_BASE.running),
+    "awaiting-input": shadeTriple(STATE_BASE["awaiting-input"]),
+    "completed": shadeTriple(STATE_BASE.completed),
+    "error": shadeTriple(STATE_BASE.error),
+};
+
+/** Frame counterpart of AGENT_BUILDER_ORB_COLORS — same bases, frame-shaped. */
+export const AGENT_BUILDER_FRAME_COLORS: Record<AgentRunState, [string, string, string]> = {
+    "idle": ACCENT_FRAME,
+    "running": frameTriple(STATE_BASE.running),
+    "awaiting-input": frameTriple(STATE_BASE["awaiting-input"]),
+    "completed": frameTriple(STATE_BASE.completed),
+    "error": frameTriple(STATE_BASE.error),
+};
+
 /** Flow speed / contrast of the shader per state (0 = still, 1 = lively). */
 export const ORB_ENERGY: Record<AgentRunState, number> = {
     // Raised across the board so the single-hue orb visibly flows (the motion,
@@ -71,6 +122,34 @@ export type AmbientFrameVariant = "hero" | "composer";
 interface AmbientFrameProps {
     $state?: AgentRunState;
     $variant?: AmbientFrameVariant;
+    $colors?: [string, string, string];
+    $agentBuilder?: boolean;
+}
+
+interface AmbientGlowSpec {
+    outerSize: number;
+    outerStrength: number;
+    innerSize: number;
+    innerStrength: number;
+}
+
+export function ambientGlow(colors: [string, string, string], spec: AmbientGlowSpec): string {
+    const [first, second] = colors;
+    return (
+        `0 0 ${spec.outerSize}px color-mix(in srgb, ${first} ${spec.outerStrength}%, transparent), ` +
+        `0 0 ${spec.innerSize}px color-mix(in srgb, ${second} ${spec.innerStrength}%, transparent)`
+    );
+}
+
+export const HERO_GLOW: AmbientGlowSpec = { outerSize: 28, outerStrength: 34, innerSize: 14, innerStrength: 20 };
+
+/** Agent Builder's own frame palette — its own accent-derived triad, kept separate from Integrator's. */
+function agentBuilderFrameColors(props: AmbientFrameProps): [string, string, string] {
+    const state = props.$state ?? "idle";
+    if (state === "idle") {
+        return props.$colors ?? ACCENT_FRAME;
+    }
+    return AGENT_BUILDER_FRAME_COLORS[state];
 }
 
 /** The frame's base color (accent floored to focusBorder for visibility); tinted in CSS. */
@@ -89,6 +168,10 @@ export const AmbientFrame = styled.div<AmbientFrameProps>`
     padding: ${(props: AmbientFrameProps) => props.$variant === "hero" ? "1.5px" : "1px"};
     border-radius: ${(props: AmbientFrameProps) => props.$variant === "hero" ? "14px" : "10px"};
     background: ${(props: AmbientFrameProps) => {
+        if (props.$agentBuilder) {
+            const [first, second, third] = agentBuilderFrameColors(props);
+            return `linear-gradient(120deg, ${first}, ${second}, ${third}, ${first})`;
+        }
         // Monochromatic gradient tinted from the state's accent so the frame
         // reads as one theme color (light stop → base → dark stop).
         const base = ambientBase(props);
@@ -101,9 +184,17 @@ export const AmbientFrame = styled.div<AmbientFrameProps>`
     background-size: 300% 300%;
     animation: ${ambientGradientShift} 9s ease infinite;
     box-shadow: ${(props: AmbientFrameProps) => {
-        const base = ambientBase(props);
         const hero = props.$variant === "hero";
         const active = !!props.$state && props.$state !== "idle";
+        if (props.$agentBuilder) {
+            return ambientGlow(agentBuilderFrameColors(props), {
+                outerSize: hero ? 18 : active ? 16 : 12,
+                outerStrength: hero ? 25 : active ? 20 : 12,
+                innerSize: hero ? 10 : active ? 10 : 8,
+                innerStrength: hero ? 12 : active ? 13 : 7,
+            });
+        }
+        const base = ambientBase(props);
         // Idle composer used to be the faintest (12/7); bump it so the frame
         // stays legible where the accent is muted or near the panel background.
         const outerStrength = hero ? 25 : active ? 20 : 18;
@@ -116,6 +207,10 @@ export const AmbientFrame = styled.div<AmbientFrameProps>`
 
     &:focus-within {
         box-shadow: ${(props: AmbientFrameProps) => {
+            if (props.$agentBuilder) {
+                const [first, second] = agentBuilderFrameColors(props);
+                return `0 0 22px color-mix(in srgb, ${first} 34%, transparent), 0 0 13px color-mix(in srgb, ${second} 20%, transparent)`;
+            }
             const base = ambientBase(props);
             return `0 0 22px color-mix(in srgb, ${base} 34%, transparent), 0 0 13px color-mix(in srgb, ${base} 20%, transparent)`;
         }};
@@ -133,21 +228,23 @@ export const AmbientFrame = styled.div<AmbientFrameProps>`
     }
 `;
 
-export const AWAITING_INPUT_LABEL = "Needs your input";
-
 /**
  * User-facing label for a non-idle run state. Never names the product: every surface
  * that shows one already does — the orb tooltip, and the status bar the extension
  * builds from the same vocabulary.
  */
+export function awaitingInputLabel(): string {
+    return "Needs your input";
+}
+
 export function activeStateLabel(status: AgentRunStatus): string {
     switch (status.state) {
         case "completed":
-            return "Done — click to open the chat";
+            return status.aiPanelOpen ? "Done" : "Done — click to open the chat";
         case "running":
             return status.label ?? "Working on it…";
         case "awaiting-input":
-            return status.label ?? AWAITING_INPUT_LABEL;
+            return status.label ?? awaitingInputLabel();
         case "error":
             return status.label ?? "Something went wrong";
         default:
@@ -182,6 +279,7 @@ interface SphereProps {
      * optional let two of them silently render a running orb at idle tempo.
      */
     energy: number;
+    highlightColor?: string;
 }
 
 /**
@@ -206,7 +304,7 @@ export const Sphere = styled.div<SphereProps>`
     background:
         radial-gradient(
             circle at 30% 24%,
-            rgba(255, 255, 255, 0.55),
+            ${(props: SphereProps) => props.highlightColor ?? "rgba(255, 255, 255, 0.55)"},
             rgba(255, 255, 255, 0.1) 24%,
             transparent 44%
         ),
@@ -276,6 +374,25 @@ export const Sphere = styled.div<SphereProps>`
     }
 `;
 
+const spin = keyframes`
+    to { transform: rotate(360deg); }
+`;
+
+export const SpinArc = styled.div<{ color: string }>`
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: ${(props: { color: string }) => props.color};
+    animation: ${spin} 1.1s linear infinite;
+    pointer-events: none;
+
+    @media (prefers-reduced-motion: reduce) {
+        animation: none;
+        opacity: 0.6;
+    }
+`;
+
 /** Glass reflection overlay — sits on top of both the shader and CSS spheres. */
 export const Gloss = styled.div`
     position: absolute;
@@ -293,6 +410,56 @@ export const IconOverlay = styled.div`
     align-items: center;
     justify-content: center;
     pointer-events: none;
+`;
+
+const auraBreathe = keyframes`
+    0%, 100% { transform: scale(1); opacity: 0.4; }
+    50% { transform: scale(1.15); opacity: 0.7; }
+`;
+
+const ACTIVE_GLOW: AmbientGlowSpec = { outerSize: 40, outerStrength: 48, innerSize: 20, innerStrength: 30 };
+
+interface OrbAuraProps {
+    $active?: boolean;
+    $colors: [string, string, string];
+}
+
+export const OrbAura = styled.div<OrbAuraProps>`
+    position: relative;
+    width: ${ORB_SIZE}px;
+    height: ${ORB_SIZE}px;
+    flex: none;
+    border-radius: 50%;
+    box-shadow: ${(props: OrbAuraProps) =>
+        ambientGlow(props.$colors, props.$active ? ACTIVE_GLOW : HERO_GLOW)};
+    transform: scale(${(props: OrbAuraProps) => (props.$active ? 1.12 : 1)});
+    transition: transform 620ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 620ms ease;
+
+    &::before {
+        content: "";
+        position: absolute;
+        inset: -75%;
+        border-radius: 50%;
+        background: ${(props: OrbAuraProps) => `radial-gradient(
+            circle,
+            color-mix(in srgb, ${props.$colors[1]} 32%, transparent) 0%,
+            color-mix(in srgb, ${props.$colors[0]} 12%, transparent) 45%,
+            transparent 70%
+        )`};
+        filter: blur(12px);
+        animation: ${auraBreathe} ${(props: OrbAuraProps) => (props.$active ? "2.6s" : "5.5s")} ease-in-out
+            infinite;
+        pointer-events: none;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        transition: none;
+
+        &::before {
+            animation: none;
+            opacity: 0.75;
+        }
+    }
 `;
 
 // ---------------------------------------------------------------------------

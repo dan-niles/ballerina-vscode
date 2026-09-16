@@ -22,13 +22,18 @@ import { keyframes } from "@emotion/react";
 import AIChatInput, { AIChatInputRef, TagOptions } from "../../AIChatInput";
 import { RunningServicesPanel } from "../../AIChatInput/RunningServicesChip";
 import { Input } from "../../AIChatInput/utils/inputUtils";
-import { AgentRunState, AIPanelPrompt, Attachment, SkillEntry, TemplateId, CodeContext } from "@wso2/ballerina-core";
-import { commandTemplates, suggestedCommandTemplates as defaultSuggestedCommandTemplates } from "../../../commandTemplates/data/commandTemplates.const";
+import { AgentRunState, AIPanelPrompt, Attachment, SkillEntry, TemplateId, CodeContext, ProductMode } from "@wso2/ballerina-core";
+import {
+    commandTemplates,
+    suggestedCommandTemplates as defaultSuggestedCommandTemplates,
+    agentBuilderSuggestedCommandTemplates,
+} from "../../../commandTemplates/data/commandTemplates.const";
+import { useProductMode } from "../../../../../hooks/useProductMode";
 import { AttachmentOptions } from "../../AIChatInput/hooks/useAttachments";
 import { getTemplateTextById } from "../../../commandTemplates/utils/utils";
 import CodeContextCard from "../../CodeContextCard";
 import { AgentMode } from "../../AIChatInput/ModeToggle";
-import { Gloss, ORB_ENERGY, Sphere } from "../../../../../components/AgentStatusOrb/shared";
+import { AGENT_BUILDER_ORB_COLORS, Gloss, ORB_ENERGY, Sphere } from "../../../../../components/AgentStatusOrb/shared";
 import { useOrbColors } from "../../../../../components/AgentStatusOrb/orbTheme";
 
 export const FooterContainer = styled.footer({
@@ -202,6 +207,7 @@ function useStickyLabel(value: string, minVisibleMs = MIN_LABEL_VISIBLE_MS): str
  */
 const LoadingIndicator: React.FC<{ label: string }> = React.memo(({ label }) => {
     const shownLabel = useStickyLabel(label);
+    const agentBuilder = useProductMode() === ProductMode.AGENT_BUILDER;
     // Callers may already end their label in a literal "..." (e.g. tool-call
     // labels); strip it so the animated ellipsis below is never doubled up.
     const baseLabel = shownLabel.replace(/\.+$/, "");
@@ -211,7 +217,7 @@ const LoadingIndicator: React.FC<{ label: string }> = React.memo(({ label }) => 
         // every change, and a replaced node is not announced.
         <LoadingIndicatorContainer aria-live="polite">
             <LoadingOrb aria-hidden="true">
-                <Sphere colors={runningColors} energy={ORB_ENERGY.running} />
+                <Sphere colors={agentBuilder ? AGENT_BUILDER_ORB_COLORS.running : runningColors} energy={ORB_ENERGY.running} />
                 <Gloss />
             </LoadingOrb>
             <LoadingLabelRow>
@@ -317,7 +323,10 @@ const Footer: React.FC<FooterProps> = ({
     ambientState,
     hidden,
 }) => {
-    const footerSuggestedCommandTemplates = suggestedCommandTemplates ?? defaultSuggestedCommandTemplates;
+    const productMode = useProductMode();
+    const agentBuilder = productMode === ProductMode.AGENT_BUILDER;
+    const footerSuggestedCommandTemplates =
+        suggestedCommandTemplates ?? (agentBuilder ? agentBuilderSuggestedCommandTemplates : defaultSuggestedCommandTemplates);
 
     return (
         <FooterContainer style={hidden ? { display: "none" } : undefined}>

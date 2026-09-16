@@ -18,6 +18,7 @@
 
 import { Dropdown, OptionProps } from "@wso2/ui-toolkit";
 import React, { ChangeEvent, useMemo } from "react"
+import { unwrapBallerinaString } from "@wso2/ballerina-core";
 import { FormField } from "../../../Form/types";
 import { useDefaultUntilEmptied } from "../useDefaultUntilEmptied";
 
@@ -46,6 +47,13 @@ export const EnumEditor = (props: EnumEditorProps) => {
     const isSetToAnOption = props.value !== undefined && props.value !== null && props.value !== ""
         && options.some(item => item.value === props.value);
 
+    // A placeholder describes the empty selection only when it names no member (e.g. "(default)"):
+    // one that matches a member is shown as the selected default instead, via `defaultOption`, and
+    // repeating it as the empty-option label too would read as a second, contradictory selection.
+    const noneContent = props.field.optional && !defaultOption
+        ? unwrapBallerinaString(props.field.placeholder?.toString()) || "No Selection"
+        : "No Selection";
+
     // The empty selection is always offered, whether or not the parameter declares a default: leaving the
     // field empty is a valid state of every enum, and the list has to be able to express it. It is also the
     // selection a value that none of the members stands for falls back to.
@@ -54,11 +62,11 @@ export const EnumEditor = (props: EnumEditorProps) => {
             ...options,
             {
                 id: "default-option",
-                content: "No Selection",
+                content: noneContent,
                 value: DEFAULT_NONE_SELECTED_VALUE
             }
         ],
-        [options]
+        [options, noneContent]
     );
 
     const [emptiedByUser, reportEmptied] = useDefaultUntilEmptied(isSetToAnOption);

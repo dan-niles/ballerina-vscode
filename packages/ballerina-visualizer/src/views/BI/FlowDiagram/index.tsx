@@ -17,12 +17,11 @@
  */
 
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
-import { TraceAnimationEvent } from "@wso2/ballerina-core";
 import { useRpcContext } from "@wso2/ballerina-rpc-client";
 import styled from "@emotion/styled";
 import { goToAgent, startAgentChat } from "../AIChatAgent/utils";
 import { DIAGRAM_REFRESH_DEBOUNCE_MS } from "../diagramRefreshDebounce";
-import { MemoizedDiagram, setTraceAnimationActive, setTraceAnimationInactive } from "@wso2/bi-diagram";
+import { MemoizedDiagram } from "@wso2/bi-diagram";
 import {
     BIAvailableNodesRequest,
     Flow,
@@ -88,6 +87,7 @@ import { ConnectionListItem, MarketplaceItem } from "@wso2/wso2-platform-core";
 import { usePlatformExtContext } from "../../../providers/platform-ext-ctx-provider";
 import { requestMiniChatOpen } from "../../../components/AgentStatusOrb/shared";
 import { AgentEditorView, useAgentEditorController } from "../AIChatAgent/useAgentEditorController";
+import { useAssistantName } from "../../../hooks/useProductMode";
 import { CloudKnowledgeBasePage } from "../Connection/DevantConnections/CloudKnowledgeBasePage";
 import { prepareDevantKnowledgeBase } from "../Connection/DevantConnections/devant-kb-utils";
 
@@ -242,6 +242,7 @@ export function BIFlowDiagram(props: BIFlowDiagramProps) {
     const visualizerLocationRef = useRef<VisualizerLocation>();
     const [entrypointContext, setEntrypointContext] = useState<{ serviceName?: string; functionName?: string }>();
     const [isUserAuthenticated, setIsUserAuthenticated] = useState<boolean>(false);
+    const assistantName = useAssistantName();
     const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
     // Navigation stack for back navigation
     const [navigationStack, setNavigationStack] = useState<NavigationStackItem[]>([]);
@@ -412,17 +413,6 @@ export function BIFlowDiagram(props: BIFlowDiagramProps) {
     useEffect(() => {
         debouncedGetFlowModelForBreakpoints();
     }, [breakpointState]);
-
-    useEffect(() => {
-        rpcClient.onTraceAnimationChanged((event: TraceAnimationEvent) => {
-            console.log('[TraceAnimation] Webview received event:', event.type, event.active, event.toolNames);
-            if (event.active) {
-                setTraceAnimationActive(event.toolNames, event.type, event.activeToolName, event.systemInstructions, event.entrypointServiceName, event.entrypointFunctionName, event.activeToolKitName);
-            } else {
-                setTraceAnimationInactive(event.type, event.activeToolName);
-            }
-        });
-    }, [rpcClient]);
 
     useEffect(() => {
         rpcClient.onProjectContentUpdated(() => {
@@ -1335,7 +1325,7 @@ export function BIFlowDiagram(props: BIFlowDiagramProps) {
         pendingCapabilityCloseRef.current = false;
         pendingDurableMcpAgentRef.current = null;
         if (agentEditor.view !== "NONE") {
-            agentEditor.close();
+            agentEditor.cancel();
         }
         // Dismissing the panel ends the agent flow, so the flags that say "this activity list belongs
         // to an agent" end with it. They are not cleared in resetNodeSelectionStates, which also runs
@@ -4257,6 +4247,7 @@ export function BIFlowDiagram(props: BIFlowDiagramProps) {
                 onClickOverlay: handleOnCloseSidePanel,
             },
             isUserAuthenticated,
+            aiAssistantName: assistantName,
             entrypointContext,
         }),
         [
@@ -4272,6 +4263,7 @@ export function BIFlowDiagram(props: BIFlowDiagramProps) {
             selectedNodeId,
             rpcClient,
             isUserAuthenticated,
+            assistantName,
             entrypointContext,
             showSidePanel,
         ]

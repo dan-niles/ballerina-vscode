@@ -23,17 +23,25 @@ import { useRpcContext } from "@wso2/ballerina-rpc-client";
 import { Icon, ThemeColors, Typography } from "@wso2/ui-toolkit";
 import React from "react";
 import { Banner } from "../../../components/Banner";
-import { CopilotOrb } from "../../../components/AgentStatusOrb/CopilotOrb";
-import { useOrbColors } from "../../../components/AgentStatusOrb/orbTheme";
+import {
+    ACCENT_CORE,
+    ACCENT_SPHERE,
+    frameTriple,
+    IconOverlay,
+    OrbAura,
+    ORB_ENERGY,
+    Sphere,
+} from "../../../components/AgentStatusOrb/shared";
+import { useAssistantName, useAssistantTagline } from "../../../hooks/useProductMode";
 
-const LOGIN_ORB_SIZE = 58;
+const WIDE = "@media (min-width: 940px)";
 
-const PanelWrapper = styled.div`
+const PanelWrapper = styled.div<{ $embedded?: boolean }>`
     display: flex;
     flex-direction: column;
-    height: 100vh;
-    overflow-y: auto;
-    padding: 24px 16px;
+    height: ${(props: { $embedded?: boolean }) => (props.$embedded ? "auto" : "100vh")};
+    overflow-y: ${(props: { $embedded?: boolean }) => (props.$embedded ? "visible" : "auto")};
+    padding: ${(props: { $embedded?: boolean }) => (props.$embedded ? "0" : "24px 16px")};
 `;
 
 const TopSpacer = styled.div`
@@ -50,51 +58,22 @@ const HeaderContent = styled.div`
     flex-direction: column;
     align-items: center;
     text-align: center;
-    margin-bottom: 32px;
-`;
-
-const WelcomeOrbHalo = styled.div`
-    position: relative;
-    width: 86px;
-    height: 86px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    &::before {
-        content: "";
-        position: absolute;
-        inset: -14px;
-        border-radius: 50%;
-        background: radial-gradient(
-            circle,
-            color-mix(in srgb, var(--vscode-button-background) 28%, transparent),
-            transparent 70%
-        );
-        filter: blur(8px);
-        pointer-events: none;
-    }
-
-    @media (forced-colors: active) {
-        &::before {
-            display: none;
-        }
-    }
-`;
-
-const WelcomeOrb = styled.div`
-    position: relative;
-    width: ${LOGIN_ORB_SIZE}px;
-    height: ${LOGIN_ORB_SIZE}px;
-    flex: none;
+    margin-bottom: 40px;
 `;
 
 const Title = styled.h2`
-    display: inline-flex;
-    margin-top: 24px;
-    margin-bottom: 8px;
-    font-size: 18px;
-    font-weight: 700;
+    margin: 20px 0 0;
+    font-size: 24px;
+    font-weight: 400;
+    color: var(--vscode-foreground);
+`;
+
+const Subtitle = styled.p`
+    margin: 8px 0 0;
+    max-width: 420px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--vscode-descriptionForeground);
 `;
 
 const BodyContent = styled.div`
@@ -105,6 +84,10 @@ const BodyContent = styled.div`
     max-width: 380px;
     align-self: center;
     gap: 0;
+
+    ${WIDE} {
+        max-width: 680px;
+    }
 `;
 
 const WSO2LoginButton = styled.button`
@@ -113,6 +96,8 @@ const WSO2LoginButton = styled.button`
     justify-content: center;
     gap: 12px;
     width: 100%;
+    max-width: 420px;
+    align-self: center;
     padding: 14px 20px;
     background-color: ${ThemeColors.PRIMARY};
     color: ${ThemeColors.ON_PRIMARY};
@@ -131,8 +116,7 @@ const WSO2LoginButton = styled.button`
 `;
 
 const RecommendedBadge = styled.div`
-    margin-top: 8px;
-    padding: 4px 0;
+    margin-top: 12px;
     font-size: 12px;
     color: ${ThemeColors.ON_SURFACE_VARIANT};
     text-align: center;
@@ -144,13 +128,25 @@ const SectionDivider = styled.div`
     color: var(--vscode-descriptionForeground);
     font-size: 12px;
     width: 100%;
-    margin: 28px 0 16px;
+    margin: 40px 0 16px;
     &::before,
     &::after {
         content: "";
         flex: 1;
         border-bottom: 1px solid var(--vscode-widget-border);
         margin: 0 10px;
+    }
+`;
+
+const ProviderGrid = styled.div`
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+
+    ${WIDE} {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 `;
 
@@ -162,16 +158,20 @@ const ProviderCard = styled.button`
     padding: 14px 16px;
     background: none;
     border: 1px solid var(--vscode-widget-border);
-    border-radius: 6px;
+    border-radius: 8px;
     cursor: pointer;
     text-align: left;
-    margin-bottom: 8px;
     color: var(--vscode-foreground);
     &:hover {
         background-color: var(--vscode-list-hoverBackground);
     }
-    &:last-child {
-        margin-bottom: 0;
+
+    ${WIDE} {
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px;
     }
 `;
 
@@ -182,16 +182,27 @@ const ProviderLogoWrapper = styled.div`
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+
+    ${WIDE} {
+        width: auto;
+        height: 24px;
+        justify-content: flex-start;
+    }
 `;
 
 const ProviderInfo = styled.div`
     flex: 1;
     min-width: 0;
+
+    ${WIDE} {
+        flex: 0 0 auto;
+        width: 100%;
+    }
 `;
 
 const ProviderName = styled.div`
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 500;
     color: var(--vscode-foreground);
 `;
 
@@ -205,17 +216,25 @@ const ChevronIcon = styled.span`
     color: ${ThemeColors.PRIMARY};
     font-size: 16px;
     flex-shrink: 0;
+
+    ${WIDE} {
+        display: none;
+    }
 `;
 
 const Footer = styled.div`
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 12px;
-    margin-top: 24px;
+    gap: 10px;
+    margin-top: 40px;
     width: 100%;
     max-width: 380px;
     align-self: center;
+
+    ${WIDE} {
+        max-width: 560px;
+    }
 `;
 
 const FooterDisclaimer = styled.div`
@@ -258,6 +277,8 @@ const InstallingContainer = styled.div`
     align-items: center;
     gap: 8px;
     width: 100%;
+    max-width: 420px;
+    align-self: center;
 `;
 
 const InstallButton = styled.button`
@@ -279,9 +300,10 @@ const InstallButton = styled.button`
 `;
 
 
-const LoginPanel: React.FC = () => {
+const LoginPanel: React.FC<{ embedded?: boolean; subtitle?: React.ReactNode }> = ({ embedded, subtitle }) => {
     const { rpcClient } = useRpcContext();
-    const idleColors = useOrbColors("idle");
+    const assistantName = useAssistantName();
+    const tagline = useAssistantTagline();
 
     const { data: isPlatformAvailable, refetch: refetchPlatformAvailability } = useQuery({
         queryKey: ["platform-availability"],
@@ -318,26 +340,21 @@ const LoginPanel: React.FC = () => {
     };
 
     return (
-        <PanelWrapper>
-            <TopSpacer />
+        <PanelWrapper $embedded={embedded}>
+            {!embedded && <TopSpacer />}
             <HeaderContent>
-                <WelcomeOrbHalo>
-                    <WelcomeOrb role="img" aria-label="WSO2 Integrator Copilot">
-                        <CopilotOrb state="idle" colors={idleColors} size={LOGIN_ORB_SIZE} iconSize={24} />
-                    </WelcomeOrb>
-                </WelcomeOrbHalo>
-                <Title>Welcome to WSO2 Integrator Copilot</Title>
-                <Typography
-                    variant="body1"
-                    sx={{
-                        color: "var(--vscode-descriptionForeground)",
-                        textAlign: "center",
-                        maxWidth: 350,
-                        fontSize: 14,
-                    }}
-                >
-                    Your AI pair programmer for integration development
-                </Typography>
+                <OrbAura $colors={frameTriple(ACCENT_SPHERE[0])}>
+                    <Sphere colors={ACCENT_SPHERE} energy={ORB_ENERGY.idle} highlightColor={ACCENT_CORE} />
+                    <IconOverlay>
+                        <Icon
+                            name="bi-ai-chat"
+                            sx={{ width: 26, height: 26 }}
+                            iconSx={{ fontSize: "26px", color: "#ffffff", cursor: "default" }}
+                        />
+                    </IconOverlay>
+                </OrbAura>
+                <Title>{assistantName}</Title>
+                <Subtitle>{subtitle ?? tagline}</Subtitle>
             </HeaderContent>
 
             <BodyContent>
@@ -354,7 +371,7 @@ const LoginPanel: React.FC = () => {
                 ) : (
                     <InstallingContainer>
                         <Typography variant="body2" sx={{ textAlign: "center", color: "var(--vscode-descriptionForeground)" }}>
-                            Install the WSO2 Integrator extension to sign in and use WSO2 Integrator Copilot.
+                            Install the WSO2 Integrator extension to sign in and use {assistantName}.
                         </Typography>
                         <InstallButton
                             disabled={isInstallingExtension}
@@ -371,40 +388,42 @@ const LoginPanel: React.FC = () => {
                     </InstallingContainer>
                 )}
 
-                <SectionDivider>Use your own AI provider</SectionDivider>
+                <SectionDivider>Or use your own AI provider</SectionDivider>
 
-                <ProviderCard onClick={handleAnthropicKeyClick}>
-                    <ProviderLogoWrapper>
-                        <Icon name="bi-anthropic" sx={{ width: 24, height: 24 }} iconSx={{ fontSize: "24px" }} />
-                    </ProviderLogoWrapper>
-                    <ProviderInfo>
-                        <ProviderName>Anthropic API Key</ProviderName>
-                        <ProviderDesc>Use your Anthropic API key to power Copilot</ProviderDesc>
-                    </ProviderInfo>
-                    <ChevronIcon>›</ChevronIcon>
-                </ProviderCard>
+                <ProviderGrid>
+                    <ProviderCard onClick={handleAnthropicKeyClick}>
+                        <ProviderLogoWrapper>
+                            <Icon name="bi-anthropic" sx={{ width: 20, height: 20 }} iconSx={{ fontSize: "20px" }} />
+                        </ProviderLogoWrapper>
+                        <ProviderInfo>
+                            <ProviderName>Anthropic API Key</ProviderName>
+                            <ProviderDesc>Use your Anthropic API key</ProviderDesc>
+                        </ProviderInfo>
+                        <ChevronIcon>›</ChevronIcon>
+                    </ProviderCard>
 
-                <ProviderCard onClick={handleAwsClick}>
-                    <ProviderLogoWrapper>
-                        <Icon name="bi-aws" sx={{ width: 28, height: 28 }} iconSx={{ fontSize: "28px" }} />
-                    </ProviderLogoWrapper>
-                    <ProviderInfo>
-                        <ProviderName>AWS Bedrock</ProviderName>
-                        <ProviderDesc>Use your AWS Bedrock account</ProviderDesc>
-                    </ProviderInfo>
-                    <ChevronIcon>›</ChevronIcon>
-                </ProviderCard>
+                    <ProviderCard onClick={handleAwsClick}>
+                        <ProviderLogoWrapper>
+                            <Icon name="bi-aws" sx={{ width: 24, height: 24 }} iconSx={{ fontSize: "24px" }} />
+                        </ProviderLogoWrapper>
+                        <ProviderInfo>
+                            <ProviderName>AWS Bedrock</ProviderName>
+                            <ProviderDesc>Use your AWS Bedrock account</ProviderDesc>
+                        </ProviderInfo>
+                        <ChevronIcon>›</ChevronIcon>
+                    </ProviderCard>
 
-                <ProviderCard onClick={handleVertexAiClick}>
-                    <ProviderLogoWrapper>
-                        <Icon name="bi-vertex-ai" sx={{ width: 28, height: 28 }} iconSx={{ fontSize: "28px" }} />
-                    </ProviderLogoWrapper>
-                    <ProviderInfo>
-                        <ProviderName>Google Vertex AI</ProviderName>
-                        <ProviderDesc>Use your Google Vertex AI account</ProviderDesc>
-                    </ProviderInfo>
-                    <ChevronIcon>›</ChevronIcon>
-                </ProviderCard>
+                    <ProviderCard onClick={handleVertexAiClick}>
+                        <ProviderLogoWrapper>
+                            <Icon name="bi-vertex-ai" sx={{ width: 24, height: 24 }} iconSx={{ fontSize: "24px" }} />
+                        </ProviderLogoWrapper>
+                        <ProviderInfo>
+                            <ProviderName>Google Vertex AI</ProviderName>
+                            <ProviderDesc>Use your Google Vertex AI account</ProviderDesc>
+                        </ProviderInfo>
+                        <ChevronIcon>›</ChevronIcon>
+                    </ProviderCard>
+                </ProviderGrid>
             </BodyContent>
 
             <Footer>
@@ -422,7 +441,7 @@ const LoginPanel: React.FC = () => {
                 </FooterLinks>
             </Footer>
 
-            <EndSpacer />
+            {!embedded && <EndSpacer />}
         </PanelWrapper>
     );
 };

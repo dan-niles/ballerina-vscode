@@ -16,26 +16,38 @@
  * under the License.
  */
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import styled from "@emotion/styled";
-import { keyframes } from "@emotion/react";
+import { css, keyframes } from "@emotion/react";
 import { useRpcContext } from "@wso2/ballerina-rpc-client";
-import { AgentRunStatus, AgentRunState, SHARED_COMMANDS } from "@wso2/ballerina-core";
+import { AgentRunStatus, AgentRunState, ProductMode, SHARED_COMMANDS } from "@wso2/ballerina-core";
+import { Icon } from "@wso2/ui-toolkit";
+import { ShaderOrb } from "./ShaderOrb";
+import { useAssistantName, useProductMode, useShortAssistantName } from "../../hooks/useProductMode";
 import { MiniChat } from "./MiniChat";
-import { CopilotOrb } from "./CopilotOrb";
 import { useOrbColors } from "./orbTheme";
 import {
     Anchor,
     ANCHOR_STORAGE_KEY,
     EDGE_MARGIN,
     loadAnchor,
+    ACCENT_CORE,
+    ACCENT_FRAME,
+    AGENT_BUILDER_ORB_COLORS,
+    SpinArc as AgentSpinArc,
+    FALLBACK_ORB_THEME,
+    ORB_ENERGY,
     ORB_SIZE,
+    Sphere,
+    Gloss,
+    IconOverlay,
     activeStateLabel,
     subscribeAgentRunStatus,
     subscribeOrbSuppressed,
     subscribeMiniChatOpen,
     syncOrbThemeFromSetting,
     useAmbientCopilotPresence,
+    useOrbTheme,
 } from "./shared";
 import { createMiniChatPrompt, MiniChatPrompt } from "./promptHandoff";
 
@@ -97,6 +109,11 @@ function nearestAnchor(x: number, y: number): Anchor {
     return `${vertical}-${horizontal}` as Anchor;
 }
 
+const rotate = keyframes`
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+`;
+
 const breathe = keyframes`
     0%, 100% { transform: scale(1); }
     50% { transform: scale(1.12); }
@@ -111,6 +128,11 @@ const bloom = keyframes`
 const fadeIn = keyframes`
     from { opacity: 0; transform: translateX(6px); }
     to { opacity: 1; transform: translateX(0); }
+`;
+
+const haloPulse = keyframes`
+    0%, 100% { opacity: 0.25; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.18); }
 `;
 
 const Wrapper = styled.div`
@@ -217,9 +239,11 @@ const InviteInput = styled.input`
 
 interface OrbStyleProps {
     state: AgentRunState;
+    colors: [string, string, string];
+    agentBuilder: boolean;
 }
 
-const OrbButton = styled.button<{ state: AgentRunState }>`
+const OrbButton = styled.button<{ state: AgentRunState; agentBuilder: boolean }>`
     pointer-events: auto;
     position: relative;
     width: ${ORB_SIZE}px;
@@ -230,7 +254,8 @@ const OrbButton = styled.button<{ state: AgentRunState }>`
     cursor: grab;
     outline-offset: 4px;
     touch-action: none;
-    opacity: ${(props: Pick<OrbStyleProps, "state">) => (props.state === "idle" ? 0.85 : 1)};
+    opacity: ${(props: Pick<OrbStyleProps, "state" | "agentBuilder">) =>
+        !props.agentBuilder && props.state === "idle" ? 0.85 : 1};
     transition: opacity 0.3s ease, transform 0.2s ease;
     &:hover {
         opacity: 1;
@@ -248,7 +273,72 @@ const OrbButton = styled.button<{ state: AgentRunState }>`
     }
 `;
 
+const Halo = styled.div<{ colors: [string, string, string] }>`
+    position: absolute;
+    inset: -16px;
+    border-radius: 50%;
+    background: radial-gradient(
+        circle,
+        ${(props: Pick<OrbStyleProps, "colors">) => props.colors[1]} 0%,
+        transparent 70%
+    );
+    animation: ${haloPulse} 1.8s ease-in-out infinite;
+    pointer-events: none;
+    @media (prefers-reduced-motion: reduce) {
+        animation: none;
+        opacity: 0.4;
+    }
+`;
+
+const Aura = styled.div<{ colors: [string, string, string]; state: AgentRunState }>`
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    background: conic-gradient(
+        from 0deg,
+        ${(props: Pick<OrbStyleProps, "colors">) => `${props.colors[0]}, ${props.colors[1]}, ${props.colors[2]}, ${props.colors[0]}`}
+    );
+    filter: blur(8px);
+    opacity: ${(props: Pick<OrbStyleProps, "state">) => (props.state === "idle" ? 0.45 : props.state === "running" ? 1 : 0.85)};
+    ${(props: Pick<OrbStyleProps, "state">) =>
+        props.state === "running"
+            ? css`animation: ${rotate} 2.8s linear infinite;`
+            : props.state === "idle"
+                ? css`animation: ${rotate} 14s linear infinite;`
+                : css`animation: ${rotate} 9s linear infinite;`}
+    @media (prefers-reduced-motion: reduce) {
+        animation: none;
+    }
+`;
+
+/** Thin rim at the sphere's edge — a soft on-accent highlight, theme-driven for Integrator; accent-colored for Agent Builder. */
+const BrandRing = styled.div<{ ringColor?: string }>`
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1.5px solid ${(props: { ringColor?: string }) => props.ringColor ?? "color-mix(in srgb, var(--vscode-button-foreground) 35%, transparent)"};
+    pointer-events: none;
+`;
+
+/** Brighter arc traveling the ring while the agent runs — Integrator's own, theme-driven variant. */
+const SpinArc = styled.div`
+    position: absolute;
+    inset: -2px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: var(--vscode-button-foreground);
+    animation: ${rotate} 1.1s linear infinite;
+    pointer-events: none;
+    @media (prefers-reduced-motion: reduce) {
+        display: none;
+    }
+`;
+
 export function AgentStatusOrb() {
+    const productMode = useProductMode();
+    const assistantName = useAssistantName();
+    const shortName = useShortAssistantName();
+    const agentBuilder = productMode === ProductMode.AGENT_BUILDER;
     const { rpcClient } = useRpcContext();
     const [status, setStatus] = useState<AgentRunStatus | null>(null);
     const statusRef = useRef<AgentRunStatus | null>(null);
@@ -271,6 +361,10 @@ export function AgentStatusOrb() {
     const miniPromptRef = useRef<MiniChatPrompt | undefined>(undefined);
     /** Forces a fresh mini instance when a diagram launches it while already open. */
     const [miniChatKey, setMiniChatKey] = useState(0);
+    /** WebGL unavailable — render the CSS gradient sphere instead. */
+    const [webglFailed, setWebglFailed] = useState(false);
+    const handleWebglFailed = useCallback(() => setWebglFailed(true), []);
+
     useEffect(() => {
         if (!rpcClient) {
             return;
@@ -318,7 +412,8 @@ export function AgentStatusOrb() {
 
     // Resolve orb colors before any early return so the hook order stays stable
     // across renders (status is null while the orb is hidden).
-    const colors = useOrbColors(status?.state ?? "idle");
+    const themeColors = useOrbColors(status?.state ?? "idle");
+    const requestedTheme = useOrbTheme();
 
     useAmbientCopilotPresence(!orbHidden);
 
@@ -355,8 +450,17 @@ export function AgentStatusOrb() {
     }
 
     const state = status.state;
-    // Idle has nothing to report, so the tooltip falls back to the bare product name.
-    const label = state === "idle" ? undefined : activeStateLabel(status);
+    const colors = agentBuilder ? AGENT_BUILDER_ORB_COLORS[state] : themeColors;
+    // Agent Builder always renders the CSS sphere; Integrator follows the user's orb-theme
+    // setting, falling back to the CSS sphere when WebGL can't render the animated one.
+    const resolvedTheme = requestedTheme === "animated" && webglFailed ? FALLBACK_ORB_THEME : requestedTheme;
+    const cssSphere = agentBuilder || resolvedTheme === "simple";
+    const sphereHighlight = !agentBuilder
+        ? undefined
+        : state === "idle"
+            ? ACCENT_CORE
+            : `color-mix(in srgb, ${colors[0]} 70%, transparent)`;
+    const label = state === "idle" ? `Chat with ${assistantName}` : activeStateLabel(status);
     const showLabel = !dragging && !snapping && state !== "idle" && !miniOpen;
 
     // Typing into the invite starts the conversation in the mini chat — every
@@ -466,73 +570,107 @@ export function AgentStatusOrb() {
 
     return (
         <>
-        {miniOpen && (
-            <MiniChat
-                key={miniChatKey}
-                anchor={anchor}
-                onClose={() => setMiniOpen(false)}
-                takeInitialPrompt={() => {
-                    const prompt = miniPromptRef.current;
-                    miniPromptRef.current = undefined;
-                    return prompt;
-                }}
-            />
-        )}
-        <Wrapper
-            style={{ ...wrapperStyle, flexDirection }}
-            onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => setHovered(false)}
-        >
-            {inviteHosted && (
-                <InviteHitBridge visible={inviteVisible}>
-                    <InviteBox visible={inviteVisible}>
-                        <InviteInput
-                            value={inviteText}
-                            onChange={(event) => setInviteText(event.target.value)}
-                            onKeyDown={(event) => {
-                                if (event.key === "Enter") {
-                                    submitInvite(event.currentTarget);
-                                } else if (event.key === "Escape") {
-                                    setInviteText("");
-                                    event.currentTarget.blur();
-                                }
-                            }}
-                            onFocus={() => setInviteFocused(true)}
-                            onBlur={() => setInviteFocused(false)}
-                            placeholder="How can I help?"
-                            aria-label="Message WSO2 Integrator Copilot"
-                        />
-                        {inviteText.length > 0 && (
-                            <InviteClear
-                                type="button"
-                                title="Clear"
-                                aria-label="Clear the message"
-                                // Keep focus in the input so clearing never ends the typing.
-                                onMouseDown={(event) => event.preventDefault()}
-                                onClick={() => setInviteText("")}
-                            >
-                                <span className="codicon codicon-close" />
-                            </InviteClear>
-                        )}
-                    </InviteBox>
-                </InviteHitBridge>
+            {miniOpen && (
+                <MiniChat
+                    key={miniChatKey}
+                    anchor={anchor}
+                    onClose={() => setMiniOpen(false)}
+                    takeInitialPrompt={() => {
+                        const prompt = miniPromptRef.current;
+                        miniPromptRef.current = undefined;
+                        return prompt;
+                    }}
+                />
             )}
-            {showLabel && label && <LabelPill onClick={() => setMiniOpen(true)}>{label}</LabelPill>}
-            <OrbButton
-                state={state}
-                onClick={handleClick}
-                onDoubleClick={handleDoubleClick}
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onFocus={() => setOrbFocused(true)}
-                onBlur={() => setOrbFocused(false)}
-                title={label ? `WSO2 Integrator Copilot — ${label}` : "WSO2 Integrator Copilot"}
-                aria-label={label ? `WSO2 Integrator Copilot: ${label}. Click to open the mini chat, double-click for the chat panel.` : "Click to open the WSO2 Integrator Copilot mini chat, double-click for the chat panel"}
+            <Wrapper
+                style={{ ...wrapperStyle, flexDirection }}
+                onMouseEnter={() => setHovered(true)}
+                onMouseLeave={() => setHovered(false)}
             >
-                <CopilotOrb state={state} colors={colors} size={ORB_SIZE} />
-            </OrbButton>
-        </Wrapper>
+                {inviteHosted && (
+                    <InviteHitBridge visible={inviteVisible}>
+                        <InviteBox visible={inviteVisible}>
+                            <InviteInput
+                                value={inviteText}
+                                onChange={(event) => setInviteText(event.target.value)}
+                                onKeyDown={(event) => {
+                                    if (event.key === "Enter") {
+                                        submitInvite(event.currentTarget);
+                                    } else if (event.key === "Escape") {
+                                        setInviteText("");
+                                        event.currentTarget.blur();
+                                    }
+                                }}
+                                onFocus={() => setInviteFocused(true)}
+                                onBlur={() => setInviteFocused(false)}
+                                placeholder="How can I help?"
+                                aria-label={`Message ${assistantName}`}
+                            />
+                            {inviteText.length > 0 && (
+                                <InviteClear
+                                    type="button"
+                                    title="Clear"
+                                    aria-label="Clear the message"
+                                    // Keep focus in the input so clearing never ends the typing.
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={() => setInviteText("")}
+                                >
+                                    <span className="codicon codicon-close" />
+                                </InviteClear>
+                            )}
+                        </InviteBox>
+                    </InviteHitBridge>
+                )}
+                {showLabel && label && <LabelPill onClick={() => setMiniOpen(true)}>{label}</LabelPill>}
+                <OrbButton
+                    state={state}
+                    agentBuilder={agentBuilder}
+                    onClick={handleClick}
+                    onDoubleClick={handleDoubleClick}
+                    onPointerDown={handlePointerDown}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                    onFocus={() => setOrbFocused(true)}
+                    onBlur={() => setOrbFocused(false)}
+                    title={label ? `${assistantName} — ${label}` : assistantName}
+                    aria-label={label ? `${assistantName}: ${label}. Click to open the mini chat, double-click for the chat panel.` : `Click to open the ${assistantName} mini chat, double-click for the chat panel`}
+                >
+                    {(state === "running" || state === "awaiting-input") && <Halo colors={colors} />}
+                    <Aura colors={colors} state={state} />
+                    {cssSphere ? (
+                        <Sphere
+                            colors={colors}
+                            energy={ORB_ENERGY[state]}
+                            highlightColor={sphereHighlight}
+                        />
+                    ) : (
+                        <ShaderOrb
+                            colors={colors}
+                            energy={ORB_ENERGY[state]}
+                            size={ORB_SIZE}
+                            onContextFailed={handleWebglFailed}
+                        />
+                    )}
+                    {!agentBuilder && <Gloss />}
+                    <BrandRing
+                        ringColor={agentBuilder ? `color-mix(in srgb, ${colors[0]} 55%, transparent)` : undefined}
+                    />
+                    {state === "running" && (
+                        agentBuilder ? <AgentSpinArc color={ACCENT_FRAME[1]} /> : <SpinArc />
+                    )}
+                    <IconOverlay>
+                        <Icon
+                            name="bi-ai-chat"
+                            sx={{ width: 26, height: 26 }}
+                            iconSx={{
+                                fontSize: "26px",
+                                color: agentBuilder ? "#ffffff" : "var(--vscode-button-foreground)",
+                                cursor: "inherit",
+                            }}
+                        />
+                    </IconOverlay>
+                </OrbButton>
+            </Wrapper>
         </>
     );
 }

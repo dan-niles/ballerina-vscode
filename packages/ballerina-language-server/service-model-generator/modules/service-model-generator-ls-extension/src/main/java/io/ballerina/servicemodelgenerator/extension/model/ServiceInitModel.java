@@ -37,7 +37,9 @@ import static io.ballerina.servicemodelgenerator.extension.util.Utils.getValueSt
 public class ServiceInitModel {
     public static final String KEY_LISTENER_VAR_NAME = "listenerVarName";
     public static final String KEY_CONFIGURE_LISTENER = "configureListener";
+    public static final String KEY_CONFIGURE_ENDPOINT = "configureEndpoint";
     public static final String KEY_EXISTING_LISTENER = "existingListener";
+    public static final String KEY_EXISTING_SERVICE = "existingService";
     public static final String KEY_LISTENER_SELECTION = "listenerSelection";
 
     private final String id;
@@ -52,6 +54,7 @@ public class ServiceInitModel {
     private final Map<String, Value> properties = new LinkedHashMap<>();
     private Boolean isLocalRepository;
     private List<String> selectedTools;
+    private Function resource;
 
     public ServiceInitModel(String id, String displayName, String description, String orgName,
                             String packageName, String moduleName, String version, String type, String icon) {
@@ -108,6 +111,14 @@ public class ServiceInitModel {
 
     public boolean isLocalRepository() {
         return Boolean.TRUE.equals(isLocalRepository);
+    }
+
+    public Function getResource() {
+        return resource;
+    }
+
+    public void setResource(Function resource) {
+        this.resource = resource;
     }
 
     public void setLocalRepository(boolean isLocalRepository) {

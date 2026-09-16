@@ -47,6 +47,7 @@ import { BreakpointMenu } from "../../BreakNodeMenu/BreakNodeMenu";
 import { NodeMetadata } from "@wso2/ballerina-core";
 import { sanitizeAgentData, toolEntryMatchesTools } from "../agentNodeUtils";
 import { useAgentNodeController } from "../AgentWidget/useAgentNodeController";
+import { getAgentTraceState } from "../AgentWidget/agentTraceAnimation";
 import { AgentReferenceRow } from "../AgentWidget/AgentReferenceRow";
 
 export namespace NodeStyles {
@@ -368,58 +369,15 @@ export function AgentCallNodeWidget(props: AgentCallNodeWidgetProps) {
     const tools = agentInfo?.tools || [];
 
     const sanitizedAgent = agentInfo?.systemPrompt ? sanitizeAgentData(agentInfo.systemPrompt) : undefined;
-    const nodeToolNames = tools.map((t: ToolData) => t.name).sort();
-    const nodeRole = sanitizedAgent?.role || '';
-    const nodeInstructions = sanitizedAgent?.instructions || '';
 
-    const entrypointMatches = traceAnimation && (() => {
-        if (entrypointContext) {
-            const traceService = traceAnimation.entrypointServiceName ?? '';
-            const traceFunction = traceAnimation.entrypointFunctionName ?? '';
-            const ctxService = entrypointContext.serviceName ?? '';
-            const ctxFunction = entrypointContext.functionName ?? '';
-            if (traceService !== ctxService || traceFunction !== ctxFunction) {
-                return false;
-            }
-        }
-        return true;
-    })();
-
-    const isTraceMatch = entrypointMatches && (() => {
-        const sysInstr = traceAnimation.systemInstructions;
-        if (sysInstr) {
-            const extractedRole = sysInstr.match(/(?:^|\n)#\s*Role[ \t]*\r?\n([\s\S]*?)(?=\r?\n#\s*Instructions|$)/i)?.[1]?.trim();
-            const extractedInstructions = sysInstr.match(/(?:^|\n)#\s*Instructions[ \t]*\r?\n([\s\S]*?)(?=\r?\n#\s*Instructions for Tool Validation Failure Handling|$)/i)?.[1]?.trim();
-
-            const roleMatch = nodeRole != null && extractedRole === nodeRole.trim();
-            const cleanedInstructions = extractedInstructions
-                ?.replace(/\n#\s*Instructions for Tool Validation Failure Handling[^\n]*\n[\s\S]*$/, '')
-                ?.trim();
-            const instrMatch = nodeInstructions != null && cleanedInstructions === nodeInstructions.trim();
-
-            if (nodeRole != null && nodeInstructions != null) {
-                return roleMatch && instrMatch;
-            }
-        }
-        // No system instructions → fall back to tool intersection
-        const hasToolOverlap =
-            traceAnimation.activeAgentToolNames.some(t => nodeToolNames.includes(t)) ||
-            traceAnimation.entries.some(e => e.type === 'execute_tool' && toolEntryMatchesTools(e, tools));
-        if (hasToolOverlap) return true;
-        // Nothing available → no match without explicit evidence
-        return false;
-    })();
-    const chatEntry = isTraceMatch ? traceAnimation.entries.find(e => e.type === 'chat') : undefined;
-    const toolEntries = (isTraceMatch ? traceAnimation.entries : [])
-        .filter(e => e.type === 'execute_tool' && toolEntryMatchesTools(e, tools));
-    const activeToolNames = toolEntries.filter(e => e.phase === 'active').map(e => e.toolName);
-    const isAnyToolActive = activeToolNames.length > 0;
-
-    // Model is active ONLY if it's chatting AND no tools are currently executing
-    const isModelActive = chatEntry?.phase === 'active' && !isAnyToolActive;
-
-    // Agent box pulses when either model or any tool is actively executing
-    const isAgentNodeActive = isModelActive || isAnyToolActive;
+    const { isModelActive, activeToolNames, isAgentNodeActive } = getAgentTraceState({
+        traceAnimation,
+        tools,
+        systemPrompt: agentInfo?.systemPrompt,
+        enabled: true,
+        requireEntrypointMatch: true,
+        entrypointContext,
+    });
 
     return (
         <NodeStyles.Node data-testid="agent-call-node" readOnly={readOnly}>

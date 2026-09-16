@@ -47,7 +47,7 @@ const sideColumnWidth = NODE_GAP_X + NODE_HEIGHT + LABEL_HEIGHT + LABEL_WIDTH;
 describe("SizingVisitor: durable-agent reference sizing", () => {
     it("sizes the full agent box (with side circle columns) when not a run() reference", () => {
         const node = createAgentBoxNode();
-        traverseFlow(createFlow(node), new SizingVisitor(false));
+        traverseFlow(createFlow(node), new SizingVisitor(undefined, false));
 
         expect(node.viewState.lw).toBe(halfNodeWidth);
         expect(node.viewState.rw).toBe(halfNodeWidth + sideColumnWidth);
@@ -56,7 +56,7 @@ describe("SizingVisitor: durable-agent reference sizing", () => {
 
     it("collapses to the simple reference row (no side columns) for a run() call site", () => {
         const node = createAgentBoxNode();
-        traverseFlow(createFlow(node), new SizingVisitor(true));
+        traverseFlow(createFlow(node), new SizingVisitor(undefined, true));
 
         expect(node.viewState.lw).toBe(halfNodeWidth);
         expect(node.viewState.rw).toBe(halfNodeWidth);

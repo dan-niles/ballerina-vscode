@@ -106,12 +106,13 @@ import { ActiveMigrationSession } from "@wso2/ballerina-rpc-client";
 import { ReviewBar } from "../ReviewBar";
 import SkillsManager from "../SkillsManager";
 import { MAX_CONTEXT_WINDOW } from "./compaction/ContextUsageWidget";
+import { useShortAssistantName } from "../../../../hooks/useProductMode";
 
 const NO_DRIFT_FOUND = "No drift identified between the code and the documentation.";
 const DRIFT_CHECK_ERROR = "Failed to check drift between the code and the documentation. Please try again.";
 
 const USAGE_EXCEEDED_THRESHOLD_PERCENT = 3;
-const DISCORD_INVITE_URL = "https://discord.com/invite/wso2";
+const QUOTA_CONTACT_EMAIL = "support@wso2.com";
 
 // Distance (px) from the bottom still considered "pinned" — absorbs late layout growth during streaming.
 const BOTTOM_THRESHOLD_PX = 80;
@@ -332,6 +333,7 @@ function scaffoldKeyHash(text: string, hiddenContext: string | undefined): strin
 }
 
 const AIChat: React.FC = () => {
+    const shortName = useShortAssistantName();
     const { rpcClient } = useRpcContext();
     const [messages, setMessages] = useState<PanelMessage[]>([]);
     const renderedMessagesRef = useRef(messages);
@@ -480,7 +482,7 @@ const AIChat: React.FC = () => {
 
     const [migrationSession, setMigrationSession] = useState<ActiveMigrationSession | null>(null);
     const [isMigrationEnhancementRunning, setIsMigrationEnhancementRunning] = useState(false);
-    const [usage, setUsage] = useState<{ remainingUsagePercentage: number; resetsIn: number; resetsAtMs?: number; orgId?: string; alreadyRequested?: boolean } | null>(null);
+    const [usage, setUsage] = useState<{ remainingUsagePercentage: number; resetsIn: number; orgId?: string; alreadyRequested?: boolean } | null>(null);
     const [isUsageExceeded, setIsUsageExceeded] = useState(false);
     const [showQuotaDialog, setShowQuotaDialog] = useState(false);
     const [quotaRequestSubmitting, setQuotaRequestSubmitting] = useState(false);
@@ -687,6 +689,7 @@ const AIChat: React.FC = () => {
                                 // A prompt handed off from another surface (e.g. the overview) can ask
                                 // for a fresh thread; clear first, then re-apply its mode (clear resets it).
                                 if (defaultPrompt.newThread) {
+                                    await reconnectSettledRef.current;
                                     await handleClearChat().catch((): void => { /* best-effort: still submit */ });
                                     setAgentMode(defaultPrompt.planMode ? AgentMode.Plan : AgentMode.Edit);
                                 }
@@ -723,8 +726,13 @@ const AIChat: React.FC = () => {
     }, []);
 
 
-    const formatResetsAt = (resetsAtMs: number): string => {
-        return new Date(resetsAtMs).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    const formatResetsIn = (seconds: number): string => {
+        const days = Math.floor(seconds / 86400);
+        if (days >= 1) return `${days} day${days > 1 ? 's' : ''}`;
+        const hours = Math.floor(seconds / 3600);
+        if (hours >= 1) return `${hours} hour${hours > 1 ? 's' : ''}`;
+        const mins = Math.floor(seconds / 60);
+        return `${mins} min${mins > 1 ? 's' : ''}`;
     };
 
     const formatResetsInExact = (seconds: number): string => {
@@ -742,10 +750,7 @@ const AIChat: React.FC = () => {
         try {
             const result = await rpcClient.getAiPanelRpcClient().getUsage();
             if (result) {
-                setUsage({
-                    ...result,
-                    resetsAtMs: result.resetsIn > 0 ? Date.now() + result.resetsIn * 1000 : undefined,
-                });
+                setUsage(result);
                 setIsUsageExceeded(result.resetsIn !== -1 && result.remainingUsagePercentage < USAGE_EXCEEDED_THRESHOLD_PERCENT);
             } else {
                 setUsage(null);
@@ -782,11 +787,11 @@ const AIChat: React.FC = () => {
                 setShowQuotaDialog(false);
                 await fetchUsage();
             } else {
-                setQuotaRequestError("Something went wrong. Please try again.");
+                setQuotaRequestError(`Something went wrong. Please try again or email ${QUOTA_CONTACT_EMAIL}.`);
             }
         } catch (e) {
             console.error("Failed to submit quota request:", e);
-            setQuotaRequestError("Something went wrong. Please try again.");
+            setQuotaRequestError(`Something went wrong. Please try again or email ${QUOTA_CONTACT_EMAIL}.`);
         } finally {
             setQuotaRequestSubmitting(false);
         }
@@ -3090,10 +3095,10 @@ const AIChat: React.FC = () => {
                         <UsageLimitNoticeContainer>
                             <span className="codicon codicon-warning" role="img" aria-hidden="true" />
                             <span>
-                                You've reached your usage limit.
-                                {usage?.resetsAtMs != null ? ` Resets ${formatResetsAt(usage.resetsAtMs)}.` : ""}
+                                You've reached your {shortName} usage limit
+                                {usage && usage.resetsIn !== -1 ? `, which resets in ${formatResetsIn(usage.resetsIn)}` : ""}.
                                 {usage?.alreadyRequested
-                                    ? <>{" "}Your request for additional quota has been submitted. Need help in the meantime? Reach out to us on <a href={DISCORD_INVITE_URL} target="_blank" rel="noreferrer">Discord</a>.</>
+                                    ? <>{" "}Your request for additional quota has been submitted. Reach us at <a href={`mailto:${QUOTA_CONTACT_EMAIL}`}>{QUOTA_CONTACT_EMAIL}</a>.</>
                                     : <>{" "}<a href="#" onClick={(e) => { e.preventDefault(); setShowQuotaDialog(true); }}>Request additional quota</a>.</>
                                 }
                             </span>
