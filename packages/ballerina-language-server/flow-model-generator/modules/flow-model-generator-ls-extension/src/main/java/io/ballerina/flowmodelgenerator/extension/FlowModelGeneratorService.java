@@ -35,6 +35,7 @@ import io.ballerina.flowmodelgenerator.core.EnclosedNodeFinder;
 import io.ballerina.flowmodelgenerator.core.ErrorHandlerGenerator;
 import io.ballerina.flowmodelgenerator.core.ModelGenerator;
 import io.ballerina.flowmodelgenerator.core.NodeTemplateGenerator;
+import io.ballerina.flowmodelgenerator.core.PasteNodesHandler;
 import io.ballerina.flowmodelgenerator.core.SourceGenerator;
 import io.ballerina.flowmodelgenerator.core.SuggestedComponentService;
 import io.ballerina.flowmodelgenerator.core.SuggestedModelGenerator;
@@ -57,6 +58,7 @@ import io.ballerina.flowmodelgenerator.extension.request.FlowModelSourceGenerato
 import io.ballerina.flowmodelgenerator.extension.request.FlowModelSuggestedGenerationRequest;
 import io.ballerina.flowmodelgenerator.extension.request.FlowNodeDeleteRequest;
 import io.ballerina.flowmodelgenerator.extension.request.FlowNodesDeleteRequest;
+import io.ballerina.flowmodelgenerator.extension.request.FlowNodesPasteRequest;
 import io.ballerina.flowmodelgenerator.extension.request.FunctionDefinitionRequest;
 import io.ballerina.flowmodelgenerator.extension.request.GetLibraryActionsRequest;
 import io.ballerina.flowmodelgenerator.extension.request.SaveClassMemberRequest;
@@ -92,6 +94,7 @@ import io.ballerina.tools.text.TextEdit;
 import io.ballerina.tools.text.TextRange;
 import org.ballerinalang.annotation.JavaSPIService;
 import org.ballerinalang.langserver.LSClientLogger;
+import org.ballerinalang.langserver.LSPackageLoader;
 import org.ballerinalang.langserver.common.utils.PathUtil;
 import org.ballerinalang.langserver.commons.LanguageServerContext;
 import org.ballerinalang.langserver.commons.service.spi.ExtendedLanguageServerService;
@@ -109,6 +112,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 import static io.ballerina.modelgenerator.commons.CommonUtils.BALLERINAX_ORG_NAME;
 
@@ -123,12 +127,14 @@ public class FlowModelGeneratorService implements ExtendedLanguageServerService 
 
     private WorkspaceManagerProxy workspaceManagerProxy;
     private LSClientLogger lsClientLogger;
+    private LanguageServerContext serverContext;
 
     @Override
     public void init(LanguageServer langServer, WorkspaceManagerProxy workspaceManagerProxy,
                      LanguageServerContext serverContext) {
         this.workspaceManagerProxy = workspaceManagerProxy;
         this.lsClientLogger = LSClientLogger.getInstance(serverContext);
+        this.serverContext = serverContext;
     }
 
     @Override
@@ -595,6 +601,54 @@ public class FlowModelGeneratorService implements ExtendedLanguageServerService 
             }
             return response;
         });
+    }
+
+    @JsonRequest
+    public CompletableFuture<FlowNodeDeleteResponse> pasteFlowNodes(FlowNodesPasteRequest request) {
+        return CompletableFuture.supplyAsync(() -> {
+            FlowNodeDeleteResponse response = new FlowNodeDeleteResponse();
+            try {
+                Path filePath = Path.of(request.filePath());
+                WorkspaceManager workspaceManager = this.workspaceManagerProxy.get();
+                workspaceManager.loadProject(filePath);
+                Optional<SemanticModel> semanticModel = workspaceManager.semanticModel(filePath);
+                Optional<Document> document = workspaceManager.document(filePath);
+                if (semanticModel.isEmpty() || document.isEmpty()) {
+                    return response;
+                }
+                Document source = null;
+                if (request.sourceFilePath() != null) {
+                    try {
+                        Path sourcePath = Path.of(request.sourceFilePath());
+                        workspaceManager.loadProject(sourcePath);
+                        source = workspaceManager.document(sourcePath).orElse(null);
+                    } catch (Exception e) {
+                        // The copy source only helps choose imports; the paste goes on without it.
+                    }
+                }
+                LSPackageLoader packages = LSPackageLoader.getInstance(serverContext);
+                List<String> visibleModules = Stream.of(packages.getDistributionRepoModules(),
+                                packages.getLocalRepoModules(), packages.getRemoteRepoModules())
+                        .flatMap(List::stream)
+                        .map(module -> module.packageOrg() + "/" + module.packageName())
+                        .toList();
+                JsonElement textEdits = PasteNodesHandler.getTextEditsToPaste(request.text(), request.target(),
+                        filePath, document.get(), semanticModel.get(), source, visibleModules);
+                Optional<JsonElement> formattedEdits = request.formatted()
+                        ? new SourceGenerator(workspaceManager, filePath).formatTextEdits(toEditsByPath(textEdits))
+                        : Optional.empty();
+                response.setFormatted(formattedEdits.isPresent());
+                response.setTextEdits(formattedEdits.orElse(textEdits));
+            } catch (Throwable e) {
+                response.setError(e);
+            }
+            return response;
+        });
+    }
+
+    @JsonRequest
+    public CompletableFuture<Boolean> canPasteFlowNodes(FlowNodesPasteRequest request) {
+        return CompletableFuture.supplyAsync(() -> PasteNodesHandler.isPasteable(request.text()));
     }
 
     private static Map<Path, List<org.eclipse.lsp4j.TextEdit>> toEditsByPath(JsonElement textEdits) {
