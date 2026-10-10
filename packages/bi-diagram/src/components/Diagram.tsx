@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import React, { useState, useEffect, useRef, memo } from "react";
+import React, { useState, useEffect, useRef, useCallback, memo } from "react";
 import { DiagramEngine, DiagramModel } from "@projectstorm/react-diagrams";
 import { cloneDeep } from "lodash";
 import { NavigationWrapperCanvasWidget } from "./DiagramNavigationWrapper/NavigationWrapperCanvasWidget";
@@ -30,7 +30,7 @@ import {
     resetDiagramZoomAndPosition,
 } from "../utils/diagram";
 import { DiagramCanvas } from "./DiagramCanvas";
-import { Flow, NodeModel, FlowNode, Branch, LineRange, NodePosition, ToolData, DraftNodeConfig } from "../utils/types";
+import { Flow, NodeModel, FlowNode, Branch, LineRange, NodePosition, ToolData, DraftNodeConfig, LinePosition } from "../utils/types";
 import { NodeFactoryVisitor } from "../visitors/NodeFactoryVisitor";
 import { NodeLinkModel } from "./NodeLink";
 import { OverlayLayerModel } from "./OverlayLayer";
@@ -47,12 +47,14 @@ import { BaseNodeModel } from "./nodes/BaseNode";
 import { useAgentFocusFit } from "./nodes/AgentWidget/useAgentFocusFit";
 import { PopupOverlay } from "./PopupOverlay";
 import { AgentNodeActions } from "./AgentNodeActions";
-import { DeleteNodesHandler, MoveNodeHandler, useNodeDrag } from "./NodeDrag/useNodeDrag";
+import { DeleteNodesHandler, isMovable, MoveNodeHandler, useNodeDrag } from "./NodeDrag/useNodeDrag";
 import { useNodeSelection } from "./NodeSelection/useNodeSelection";
 import { useMovePreview } from "./NodeDrag/useMovePreview";
-import { targetAfter } from "./NodeDrag/flowMoves";
+import { DropAnchor, outermost, targetAfter } from "./NodeDrag/flowMoves";
 
 export type { AgentNodeActions } from "./AgentNodeActions";
+
+const PASTE_CHECK_MS = 400;
 
 export interface DiagramProps {
     model: Flow;
@@ -61,6 +63,9 @@ export interface DiagramProps {
     onDeleteNode?: (node: FlowNode) => void | Promise<void>;
     onMoveNode?: MoveNodeHandler;
     onDeleteNodes?: DeleteNodesHandler;
+    onCopyNodes?: (nodes: FlowNode[]) => Promise<void>;
+    onPasteNodes?: (target: LinePosition) => Promise<boolean>;
+    onCheckPaste?: () => Promise<boolean>;
     onUndo?: () => void;
     onAddComment?: (comment: string, target: LineRange) => void;
     onNodeSelect?: (node: FlowNode) => void;
@@ -118,6 +123,9 @@ export function Diagram(props: DiagramProps) {
         onDeleteNode,
         onMoveNode,
         onDeleteNodes,
+        onCopyNodes,
+        onPasteNodes,
+        onCheckPaste,
         onUndo,
         onAddComment,
         onNodeSelect,
@@ -166,16 +174,77 @@ export function Diagram(props: DiagramProps) {
     const movePreview = useMovePreview(model, onMoveNode, onDeleteNode, onDeleteNodes, !isReadOnly);
     const selectionRef = useRef<string[]>([]);
     const nodeDrag = useNodeDrag(diagramEngine, diagramModel, canvasRootRef, movePreview.actions, onUndo, () => selectionRef.current);
+    // The clipboard has no change events, so its contents are checked whenever the diagram regains attention.
+    const [canPaste, setCanPaste] = useState(false);
+    const checkPasteRef = useRef(onCheckPaste);
+    checkPasteRef.current = onCheckPaste;
+    const lastPasteCheck = useRef(0);
+    const checkPaste = useCallback((force?: boolean) => {
+        const now = Date.now();
+        if (force !== true && now - lastPasteCheck.current < PASTE_CHECK_MS) {
+            return;
+        }
+        lastPasteCheck.current = now;
+        checkPasteRef.current?.().then(setCanPaste).catch(() => setCanPaste(false));
+    }, []);
+    useEffect(() => {
+        // Before a menu opens or a link's buttons show, and when the user comes back to the webview.
+        const recheck = () => checkPaste();
+        checkPaste(true);
+        window.addEventListener("focus", recheck);
+        document.addEventListener("pointerdown", recheck, true);
+        document.addEventListener("pointerover", recheck, true);
+        return () => {
+            window.removeEventListener("focus", recheck);
+            document.removeEventListener("pointerdown", recheck, true);
+            document.removeEventListener("pointerover", recheck, true);
+        };
+    }, [checkPaste]);
+
+    // One paste at a time: the next one must see the names the previous one took.
+    const pasting = useRef(false);
+    const pasteAt = (anchor: DropAnchor) =>
+        movePreview.afterMoves(anchor, (fresh) => {
+            const target = targetAfter(fresh);
+            if (!target || !onPasteNodes || pasting.current) {
+                return;
+            }
+            pasting.current = true;
+            nodeDrag.expectRedraw();
+            onPasteNodes(target).finally(() => (pasting.current = false));
+        });
+    const removeNodes =
+        onDeleteNodes && movePreview.actions?.remove
+            ? (nodes: FlowNode[]) => {
+                  // The rest of the flow glides into the space the deleted nodes leave.
+                  nodeDrag.expectRedraw();
+                  return movePreview.actions.remove(nodes);
+              }
+            : undefined;
+    // A cut deletes only once the copy has read the statements' text.
+    const copyNodes =
+        onCopyNodes &&
+        (async (nodes: FlowNode[], cut: boolean) => {
+            await onCopyNodes(nodes);
+            checkPaste(true);
+            if (cut) {
+                await removeNodes?.(nodes);
+            }
+        });
     const nodeSelection = useNodeSelection(diagramEngine, diagramModel, canvasRootRef, {
         enabled: !isReadOnly,
-        onDelete:
-            onDeleteNodes && movePreview.actions?.remove
-                ? (nodes) => {
-                      // The rest of the flow glides into the space the deleted nodes leave.
-                      nodeDrag.expectRedraw();
-                      return movePreview.actions.remove(nodes);
-                  }
-                : undefined,
+        onDelete: removeNodes,
+        onCopy: copyNodes,
+        canPaste,
+        checkPaste: () =>
+            (checkPasteRef.current?.() ?? Promise.resolve(false))
+                .catch(() => false)
+                .then((pasteable) => {
+                    setCanPaste(pasteable);
+                    return pasteable;
+                }),
+        flow: movePreview.flow,
+        onPaste: onPasteNodes ? pasteAt : undefined,
     });
     selectionRef.current = nodeSelection.selected;
 
@@ -387,6 +456,22 @@ export function Diagram(props: DiagramProps) {
             ((parent, target, prompt, options) =>
                 afterMoves(parent, (fresh) => onAddNodePrompt(fresh, addAt(parent, target, fresh), prompt, options))),
         onDeleteNode: onDeleteNode && ((node) => afterMoves(node, onDeleteNode)),
+        onPasteAt: onPasteNodes && !isReadOnly && canPaste ? pasteAt : undefined,
+        canPaste,
+        onNodeClipboard:
+            onCopyNodes && onPasteNodes && !isReadOnly
+                ? (action, node) => {
+                      if (action === "paste") {
+                          pasteAt(node);
+                          return;
+                      }
+                      // A node in the selection stands for the whole selection.
+                      const selected = nodeSelection.selected.includes(node.id) && diagramModel
+                          ? outermost(nodeSelection.selected.map((id) => isMovable(diagramModel, id)).filter((item): item is FlowNode => !!item))
+                          : [node];
+                      void copyNodes(selected, action === "cut");
+                  }
+                : undefined,
         onAddComment: onAddComment,
         onNodeSelect: onNodeSelect && ((node) => afterMoves(node, onNodeSelect)),
         onNodeSave: onNodeSave,
