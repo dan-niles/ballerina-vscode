@@ -456,14 +456,10 @@ export function BIFlowDiagram(props: BIFlowDiagramProps) {
             setProjectOrg(location.org);
         });
 
-        // Check user authentication status
-        rpcClient.getAiPanelRpcClient().isUserAuthenticated()
-            .then((isAuth) => {
-                setIsUserAuthenticated(isAuth);
-            })
-            .catch(() => {
-                setIsUserAuthenticated(false);
-            });
+        rpcClient.getAiPanelRpcClient().getAIMachineSnapshot()
+            .then((snapshot) => setIsUserAuthenticated(snapshot.state === "Authenticated"))
+            .catch(() => setIsUserAuthenticated(false));
+        rpcClient.onAIPanelStateChanged((state) => setIsUserAuthenticated(state === "Authenticated"));
 
         // The user's own undo/redo is not a burst to wait out.
         const unsubscribeUndoRedo = debouncedUndoRedoManager.onApplied(() => getFlowModel());
@@ -957,15 +953,6 @@ export function BIFlowDiagram(props: BIFlowDiagramProps) {
             setShowProgressIndicator(true);
             onUpdate();
         }
-
-        // Re-check authentication status
-        rpcClient.getAiPanelRpcClient().isUserAuthenticated()
-            .then((isAuth) => {
-                setIsUserAuthenticated(isAuth);
-            })
-            .catch(() => {
-                setIsUserAuthenticated(false);
-            });
 
         rpcClient
             .getBIDiagramRpcClient()
