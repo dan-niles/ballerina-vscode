@@ -25,6 +25,7 @@ import com.google.gson.JsonElement;
  *
  * @param filePath file path of the source file
  * @param flowNode flow node
+ * @param formatted whether to return the edits already formatted
  * @since 1.0.0
  */
 public record FlowNodeDeleteRequest(String filePath, JsonElement flowNode, boolean formatted) {

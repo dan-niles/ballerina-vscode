@@ -20,18 +20,15 @@ package io.ballerina.flowmodelgenerator.extension.request;
 
 import com.google.gson.JsonElement;
 
+import java.util.List;
+
 /**
- * Represents a request to the flow model getSourceCode API.
+ * Represents a request to delete several flow nodes of one file in a single edit.
  *
- * @param filePath file path of the source file
- * @param flowNode diagram node
- * @param formatted whether to return the edits already formatted
- * @since 1.0.0
+ * @param filePath  file path of the source file
+ * @param flowNodes flow nodes to delete
+ * @param formatted whether to return formatted edits
+ * @since 1.7.0
  */
-public record FlowModelSourceGeneratorRequest(String filePath, JsonElement flowNode, boolean formatted) {
-
-    public FlowModelSourceGeneratorRequest(String filePath, JsonElement flowNode) {
-        this(filePath, flowNode, false);
-    }
-
+public record FlowNodesDeleteRequest(String filePath, List<JsonElement> flowNodes, boolean formatted) {
 }
