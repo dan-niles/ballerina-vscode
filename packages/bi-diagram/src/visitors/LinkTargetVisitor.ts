@@ -22,7 +22,28 @@ import { NodeLinkModel } from "../components/NodeLink";
 import { EmptyNodeModel } from "../components/nodes/EmptyNode";
 import { END_CONTAINER, NodeTypes, START_CONTAINER } from "../resources/constants";
 import { getBranchInLinkId, getCustomNodeId, getNodeIdFromModel } from "../utils/node";
-import { Flow, FlowNode, LinkableNodeModel, NodeModel } from "../utils/types";
+import { Branch, Flow, FlowNode, LinePosition, LinkableNodeModel, NodeModel } from "../utils/types";
+
+// Where a statement added after this node goes. Shared with node moves, which must land where "+" would add.
+export function slotAfter(node: FlowNode): LinePosition {
+    const range = node.codedata.lineRange;
+    if (node.codedata.node === "COMMENT") {
+        return { line: range.endLine.line + 1, offset: 0 }; // HACK: add 1 line to avoid merging with comment
+    }
+    if (node.codedata.node === "EVENT_START") {
+        return { line: range.startLine.line, offset: range.startLine.offset + 1 }; // FIXME: need to fix with LS extension
+    }
+    return range.endLine;
+}
+
+// Where a statement added as the first in this branch goes.
+export function slotAtBranchStart(branch: Branch): LinePosition {
+    const line = branch.codedata.lineRange.startLine;
+    if (branch.codedata.node === "WORKER") {
+        return { line: line.line, offset: line.offset + branch.codedata.sourceCode.indexOf("{\n") + 1 }; // HACK: need to fix with LS extension
+    }
+    return { line: line.line, offset: line.offset + 1 }; // HACK: need to fix with LS extension
+}
 
 export class LinkTargetVisitor implements BaseVisitor {
     private skipChildrenVisit = false;
@@ -95,7 +116,7 @@ export class LinkTargetVisitor implements BaseVisitor {
         outLinks.forEach((outLink) => {
             // set target position
             if (outLink && node.codedata?.lineRange?.endLine) {
-                outLink.setTarget(node.codedata.lineRange.endLine);
+                outLink.setTarget(slotAfter(node));
                 outLink.setTopNode(node);
             }
         });
@@ -110,10 +131,7 @@ export class LinkTargetVisitor implements BaseVisitor {
         outLinks.forEach((outLink) => {
             // set target position
             if (outLink && node.codedata?.lineRange?.endLine) {
-                outLink.setTarget({
-                    line: node.codedata.lineRange.endLine.line + 1, // HACK: add 1 line to avoid merging with comment
-                    offset: 0,
-                });
+                outLink.setTarget(slotAfter(node));
                 outLink.setTopNode(node);
             }
         });
@@ -129,10 +147,7 @@ export class LinkTargetVisitor implements BaseVisitor {
         const outLinks = this.getOutLinksFromNode(node);
         // find top level do block
         outLinks?.forEach((outLink) => {
-            outLink.setTarget({
-                line: node.codedata.lineRange.startLine.line,
-                offset: node.codedata.lineRange.startLine.offset + 1, // FIXME: need to fix with LS extension
-            });
+            outLink.setTarget(slotAfter(node));
             outLink.setTopNode(node);
         });
     }
@@ -150,11 +165,7 @@ export class LinkTargetVisitor implements BaseVisitor {
                 console.error(">>> Link not found", { node, branch });
                 return;
             }
-            const line = branch.codedata.lineRange.startLine;
-            link.setTarget({
-                line: line.line,
-                offset: line.offset + 1, // HACK: need to fix with LS extension
-            });
+            link.setTarget(slotAtBranchStart(branch));
             link.setTopNode(branch);
 
             // if branch is empty, target node is empty node.
@@ -163,10 +174,7 @@ export class LinkTargetVisitor implements BaseVisitor {
             if (firstNode && firstNode.getType() === NodeTypes.EMPTY_NODE) {
                 const emptyNode = firstNode as EmptyNodeModel;
                 emptyNode.setTopNode(branch);
-                emptyNode.setTarget({
-                    line: line.line,
-                    offset: line.offset + 1, // HACK: need to fix with LS extension
-                });
+                emptyNode.setTarget(slotAtBranchStart(branch));
             }
         });
 
@@ -183,7 +191,7 @@ export class LinkTargetVisitor implements BaseVisitor {
         endIfOutLinks.forEach((outLink) => {
             // set target position
             if (outLink && node.codedata?.lineRange?.endLine) {
-                outLink.setTarget(node.codedata.lineRange.endLine);
+                outLink.setTarget(slotAfter(node));
             }
             outLink.setTopNode(node);
         });
@@ -213,11 +221,7 @@ export class LinkTargetVisitor implements BaseVisitor {
             return;
         }
         outLinks.forEach((outLink) => {
-            const line = bodyBranch.codedata.lineRange.startLine;
-            outLink.setTarget({
-                line: line.line,
-                offset: line.offset + 1, // HACK: need to fix with LS extension
-            });
+            outLink.setTarget(slotAtBranchStart(bodyBranch));
             outLink.setTopNode(bodyBranch);
             // if the body branch is empty, target node is empty node.
             // improve empty node with target position and top node
@@ -225,10 +229,7 @@ export class LinkTargetVisitor implements BaseVisitor {
             if (firstNode && firstNode.getType() === NodeTypes.EMPTY_NODE) {
                 const emptyNode = firstNode as EmptyNodeModel;
                 emptyNode.setTopNode(bodyBranch);
-                emptyNode.setTarget({
-                    line: line.line,
-                    offset: line.offset + 1, // HACK: need to fix with LS extension
-                });
+                emptyNode.setTarget(slotAtBranchStart(bodyBranch));
             }
         });
 
@@ -249,7 +250,7 @@ export class LinkTargetVisitor implements BaseVisitor {
 
         // set target position
         if (outLink && node.codedata?.lineRange?.endLine) {
-            outLink.setTarget(node.codedata.lineRange.endLine);
+            outLink.setTarget(slotAfter(node));
         }
         outLink.setTopNode(node);
     }
@@ -299,11 +300,7 @@ export class LinkTargetVisitor implements BaseVisitor {
             return;
         }
         outLinks.forEach((outLink) => {
-            const line = bodyBranch.codedata.lineRange.startLine;
-            outLink.setTarget({
-                line: line.line,
-                offset: line.offset + 1, // HACK: need to fix with LS extension
-            });
+            outLink.setTarget(slotAtBranchStart(bodyBranch));
             outLink.setTopNode(bodyBranch);
             // if the body branch is empty, target node is empty node.
             // improve empty node with target position and top node
@@ -311,10 +308,7 @@ export class LinkTargetVisitor implements BaseVisitor {
             if (firstNode && firstNode.getType() === NodeTypes.EMPTY_NODE) {
                 const emptyNode = firstNode as EmptyNodeModel;
                 emptyNode.setTopNode(bodyBranch);
-                emptyNode.setTarget({
-                    line: line.line,
-                    offset: line.offset + 1, // HACK: need to fix with LS extension
-                });
+                emptyNode.setTarget(slotAtBranchStart(bodyBranch));
             }
         });
 
@@ -330,7 +324,7 @@ export class LinkTargetVisitor implements BaseVisitor {
             endContainerOutLinks.forEach((outLink) => {
                 // set target position
                 if (outLink && node.codedata?.lineRange?.endLine) {
-                    outLink.setTarget(node.codedata.lineRange.endLine);
+                    outLink.setTarget(slotAfter(node));
                 }
                 outLink.setTopNode(node);
             });
@@ -346,7 +340,7 @@ export class LinkTargetVisitor implements BaseVisitor {
             errorOutLinks.forEach((outLink) => {
                 // set target position
                 if (outLink && node.codedata?.lineRange?.endLine) {
-                    outLink.setTarget(node.codedata.lineRange.endLine);
+                    outLink.setTarget(slotAfter(node));
                 }
                 outLink.setTopNode(node);
             });
@@ -363,12 +357,18 @@ export class LinkTargetVisitor implements BaseVisitor {
                 console.error(">>> Link not found", { node, branch });
                 return;
             }
-            const line = branch.codedata.lineRange.startLine;
-            link.setTarget({
-                line: line.line,
-                offset: line.offset + branch.codedata.sourceCode.indexOf("{\n") + 1, // HACK: need to fix with LS extension
-            });
+            link.setTarget(slotAtBranchStart(branch));
             link.setTopNode(branch);
+        });
+
+        const endContainerNodeModel = this.nodeModels.find(
+            (nodeModel) => nodeModel.getID() === getCustomNodeId(node.id, END_CONTAINER)
+        );
+        (endContainerNodeModel ? this.getOutLinksFromModel(endContainerNodeModel) : undefined)?.forEach((outLink) => {
+            if (node.codedata?.lineRange?.endLine) {
+                outLink.setTarget(slotAfter(node));
+            }
+            outLink.setTopNode(node);
         });
     }
 

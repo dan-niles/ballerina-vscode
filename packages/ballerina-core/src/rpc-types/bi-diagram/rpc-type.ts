@@ -149,7 +149,9 @@ import {
     ValidateProjectFormResponse,
     SuggestedProjectDefaultsResponse,
     UpdateProjectTitleRequest,
-    UpdatePackageTitleRequest
+    UpdatePackageTitleRequest,
+    BIMoveFlowNodeRequest,
+    BIDeleteFlowNodesRequest
 } from "./interfaces";
 import { RequestType, NotificationType } from "vscode-messenger-common";
 
@@ -157,6 +159,8 @@ const _preFix = "bi-diagram";
 export const getFlowModel: RequestType<BIFlowModelRequest, BIFlowModelResponse> = { method: `${_preFix}/getFlowModel` };
 export const getSourceCode: RequestType<BISourceCodeRequest, UpdatedArtifactsResponse> = { method: `${_preFix}/getSourceCode` };
 export const deleteFlowNode: RequestType<BISourceCodeRequest, UpdatedArtifactsResponse> = { method: `${_preFix}/deleteFlowNode` };
+export const moveFlowNode: RequestType<BIMoveFlowNodeRequest, UpdatedArtifactsResponse> = { method: `${_preFix}/moveFlowNode` };
+export const deleteFlowNodes: RequestType<BIDeleteFlowNodesRequest, UpdatedArtifactsResponse> = { method: `${_preFix}/deleteFlowNodes` };
 export const deleteByComponentInfo: RequestType<BIDeleteByComponentInfoRequest, BIDeleteByComponentInfoResponse> = { method: `${_preFix}/deleteByComponentInfo` };
 export const getAvailableNodes: RequestType<BIAvailableNodesRequest, BIAvailableNodesResponse> = { method: `${_preFix}/getAvailableNodes` };
 export const getAvailableAgents: RequestType<BIAvailableNodesRequest, BIAvailableNodesResponse> = { method: `${_preFix}/getAvailableAgents` };

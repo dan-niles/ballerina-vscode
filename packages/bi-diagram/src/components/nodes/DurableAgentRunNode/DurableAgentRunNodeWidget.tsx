@@ -77,6 +77,7 @@ import {
     durableUsageColumn,
     getDurableAgentUsages,
 } from "../AgentWidget/agentNodeLayout";
+import { isCommandKey } from "../../../utils/diagram";
 
 export namespace NodeStyles {
     export const Node = styled.div<{ readOnly: boolean }>`
@@ -821,7 +822,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
         if (readOnly) {
             return;
         }
-        if (event.metaKey) {
+        if (isCommandKey(event)) {
             onGoToSource();
             return;
         }

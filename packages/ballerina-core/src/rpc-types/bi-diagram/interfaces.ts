@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { LineRange } from "../../interfaces/common";
+import { LinePosition, LineRange } from "../../interfaces/common";
 import { DIRECTORY_MAP, Flow, FlowNode, OverviewFlow } from "../../interfaces/bi";
 import { BallerinaProjectComponents } from "../../interfaces/extended-lang-client";
 import { RemoteFunction, ServiceType } from "../../interfaces/ballerina";
@@ -291,4 +291,17 @@ export interface UpdateProjectTitleRequest {
 export interface UpdatePackageTitleRequest {
     packagePath: string;
     title: string;
+}
+
+export interface BIDeleteFlowNodesRequest {
+    filePath: string;
+    flowNodes: FlowNode[];
+}
+
+export interface BIMoveFlowNodeRequest {
+    filePath: string;
+    flowNodes: FlowNode[];
+    target: LinePosition;
+    // Wrap the moved statements in a new else block of the if that ends at the target.
+    newElse?: boolean;
 }

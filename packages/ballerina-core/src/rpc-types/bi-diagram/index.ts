@@ -147,13 +147,17 @@ import {
     ValidateProjectFormResponse,
     SuggestedProjectDefaultsResponse,
     UpdateProjectTitleRequest,
-    UpdatePackageTitleRequest
+    UpdatePackageTitleRequest,
+    BIMoveFlowNodeRequest,
+    BIDeleteFlowNodesRequest
 } from "./interfaces";
 
 export interface BIDiagramAPI {
     getFlowModel: (params: BIFlowModelRequest) => Promise<BIFlowModelResponse>;
     getSourceCode: (params: BISourceCodeRequest) => Promise<UpdatedArtifactsResponse>;
     deleteFlowNode: (params: BISourceCodeRequest) => Promise<UpdatedArtifactsResponse>;
+    moveFlowNode: (params: BIMoveFlowNodeRequest) => Promise<UpdatedArtifactsResponse>;
+    deleteFlowNodes: (params: BIDeleteFlowNodesRequest) => Promise<UpdatedArtifactsResponse>;
     deleteByComponentInfo: (params: BIDeleteByComponentInfoRequest) => Promise<BIDeleteByComponentInfoResponse>;
     getAvailableNodes: (params: BIAvailableNodesRequest) => Promise<BIAvailableNodesResponse>;
     getAvailableAgents: (params: BIAvailableNodesRequest) => Promise<BIAvailableNodesResponse>;

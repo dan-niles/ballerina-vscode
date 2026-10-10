@@ -77,6 +77,7 @@ import {
 import { useAgentNodeController } from "../AgentWidget/useAgentNodeController";
 import { getAgentTraceState, matchesUsageEntrypoint } from "../AgentWidget/agentTraceAnimation";
 import { ApprovalBadge } from "../AgentWidget/ApprovalBadge";
+import { isCommandKey } from "../../../utils/diagram";
 
 // No fallback: VS Code only ever sets contrastActiveBorder for HC themes, so this drops entirely elsewhere.
 const HIGH_CONTRAST_HOVER_OUTLINE = css`
@@ -867,7 +868,7 @@ export function AgentNodeWidget(props: AgentNodeWidgetProps) {
             return;
         }
         event.stopPropagation();
-        if (event.metaKey) {
+        if (isCommandKey(event)) {
             onGoToSource();
         } else {
             onNodeClick();

@@ -50,6 +50,7 @@ import { ELineRange, ExpressionProperty, NodeMetadata } from "@wso2/ballerina-co
 import { DiagnosticsPopUp } from "../../DiagnosticsPopUp";
 import { getDiffContainerStyles, getDiffTitleStyles, nodeHasError } from "../../../utils/node";
 import { cloneDeep } from "lodash";
+import { isCommandKey } from "../../../utils/diagram";
 
 export namespace NodeStyles {
     export type NodeStyleProp = {
@@ -270,7 +271,7 @@ export function PromptNodeWidget(props: PromptNodeWidgetProps) {
     const nodeModelIconUrl = (model.node.metadata?.data as NodeMetadata)?.model?.path || (nodeMetadata as any)?.iconUrl;
 
     const handleOnClick = async (event: React.MouseEvent<HTMLDivElement>) => {
-        if (event.metaKey) {
+        if (isCommandKey(event)) {
             // Handle action when cmd key is pressed
             onGoToSource();
         }

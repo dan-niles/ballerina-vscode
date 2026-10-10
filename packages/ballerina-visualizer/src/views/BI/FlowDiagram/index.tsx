@@ -74,7 +74,7 @@ import { useDraftNodeManager } from "./hooks/useDraftNodeManager";
 import { useDurableAgentUsages } from "./durableAgentUsages";
 import { NodePosition, STNode } from "@wso2/syntax-tree";
 import { View, ProgressIndicator, ThemeColors } from "@wso2/ui-toolkit";
-import { applyModifications, textToModifications } from "../../../utils/utils";
+import { applyModifications, handleUndo, textToModifications } from "../../../utils/utils";
 import { debouncedUndoRedoManager } from "../../../utils/debouncedUndoRedo";
 import { PanelManager, SidePanelView } from "./PanelManager";
 import {
@@ -2888,6 +2888,46 @@ export function BIFlowDiagram(props: BIFlowDiagramProps) {
         getFlowModel();
     };
 
+    const handleOnDeleteNodes = async (nodes: FlowNode[]): Promise<boolean> => {
+        setShowProgressIndicator(true);
+        const response = await rpcClient
+            .getBIDiagramRpcClient()
+            .deleteFlowNodes({ filePath: model.fileName, flowNodes: nodes })
+            .catch((error): UpdatedArtifactsResponse => ({ artifacts: [], error: String(error) }));
+        if (response.error) {
+            console.error(">>> Error deleting nodes", response);
+            setShowProgressIndicator(false);
+            return false;
+        }
+        await updateArtifactLocation(response);
+        selectedNodeRef.current = undefined;
+        resetNodeSelectionStates();
+        clearRefreshTimers();
+        setShowProgressIndicator(true);
+        getFlowModel();
+        return true;
+    };
+
+    const handleOnMoveNode = async (nodes: FlowNode[], target: LinePosition, newElse?: boolean): Promise<boolean> => {
+        if (showSidePanel) {
+            return false;
+        }
+        const response = await rpcClient.getBIDiagramRpcClient().moveFlowNode({
+            filePath: model.fileName,
+            flowNodes: nodes,
+            target,
+            newElse,
+        });
+        if (!response || response.error) {
+            console.error(">>> Error moving node", response);
+            return false;
+        }
+        await updateArtifactLocation(response);
+        clearRefreshTimers();
+        getFlowModel();
+        return true;
+    };
+
     const handleOnAddComment = (comment: string, target: LineRange) => {
         const updatedNode: FlowNode = {
             id: "40715",
@@ -4277,6 +4317,9 @@ export function BIFlowDiagram(props: BIFlowDiagramProps) {
             onAddNode: handleOnAddNode,
             onAddNodePrompt: handleOnAddNodePrompt,
             onDeleteNode: handleOnDeleteNode,
+            onMoveNode: handleOnMoveNode,
+            onDeleteNodes: handleOnDeleteNodes,
+            onUndo: () => handleUndo(rpcClient),
             onAddComment: handleOnAddComment,
             onNodeSelect: handleOnEditNodeGuarded,
             onConnectionSelect: handleOnEditConnectionGuarded,
