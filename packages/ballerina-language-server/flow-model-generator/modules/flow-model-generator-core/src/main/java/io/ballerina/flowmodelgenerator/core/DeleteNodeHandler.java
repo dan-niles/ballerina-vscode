@@ -114,6 +114,33 @@ public class DeleteNodeHandler {
         return getTextEditsToDeletedNode(lineRange, filePath, document, project);
     }
 
+    /**
+     * Deletes several components of one document in a single set of edits, so the client applies them at once.
+     *
+     * @param nodes    The components to delete, all in {@code filePath}
+     * @param filePath The file holding the components
+     * @param document The current document of {@code filePath}
+     * @return The text edits keyed by file path
+     */
+    public static JsonElement getTextEditsToDeletedNodes(List<JsonElement> nodes, Path filePath, Document document) {
+        TextDocument textDocument = document.textDocument();
+        List<LineRange> lineRanges = nodes.stream().map(DeleteNodeHandler::getNodeLineRange).toList();
+        List<TextRange> ranges = lineRanges.stream()
+                .map(range -> {
+                    int start = textDocument.textPositionFrom(range.startLine());
+                    return TextRange.from(start, textDocument.textPositionFrom(range.endLine()) - start);
+                })
+                .toList();
+        List<TextEdit> textEdits = unusedImportEdits(document, ranges);
+        for (int i = 0; i < ranges.size(); i++) {
+            LineRange elseRange = checkElseToDelete(document, ranges.get(i).startOffset(), ranges.get(i).endOffset());
+            textEdits.add(new TextEdit(CommonUtils.toRange(elseRange != null ? elseRange : lineRanges.get(i)), ""));
+        }
+        Map<Path, List<TextEdit>> textEditsMap = new HashMap<>();
+        textEditsMap.put(filePath, textEdits);
+        return gson.toJsonTree(textEditsMap);
+    }
+
     private static JsonElement getTextEditsToDeletedNode(LineRange lineRange, Path filePath,
                                                          Document document, Project project) {
         TextDocument textDocument = document.textDocument();

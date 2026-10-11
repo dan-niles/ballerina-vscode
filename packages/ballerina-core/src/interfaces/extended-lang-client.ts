@@ -951,6 +951,8 @@ export type BIDeleteByComponentInfoRequest = {
     filePath: string;
     component: ComponentInfo;
     nodeType?: string;
+    // Components of filePath deleted together in one edit instead of component.
+    components?: ComponentInfo[];
 }
 
 export type BIDeleteByComponentInfoResponse = {
@@ -974,6 +976,8 @@ export type BIAvailableNodesResponse = {
 export interface BILibraryActionsRequest {
     filePath: string;
     codedata: CodeData;
+    // Answer only from packages already in the local repositories, never pulling from Central.
+    offline?: boolean;
 }
 
 export type BILibraryActionsResponse = {
