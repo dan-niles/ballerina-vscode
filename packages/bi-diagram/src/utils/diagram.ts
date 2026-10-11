@@ -167,12 +167,14 @@ const PAN_KEEP_VISIBLE = 500;
 export function clampOffset(engine: DiagramEngine): { x: number; y: number } | undefined {
     const model = engine.getModel();
     const canvas = engine.getCanvas();
-    const nodes = model?.getNodes() ?? [];
-    if (!canvas || nodes.length === 0) {
+    // A node not laid out yet has no size; a NaN offset never equals itself, so setting it would re-fire forever.
+    const boxes = (model?.getNodes() ?? [])
+        .map((node) => ({ x: node.getX(), y: node.getY(), right: node.getX() + node.width, bottom: node.getY() + node.height }))
+        .filter((box) => [box.x, box.y, box.right, box.bottom].every(Number.isFinite));
+    if (!canvas || boxes.length === 0) {
         return undefined;
     }
     const zoom = model.getZoomLevel() / 100;
-    const boxes = nodes.map((node) => ({ x: node.getX(), y: node.getY(), right: node.getX() + node.width, bottom: node.getY() + node.height }));
     const minX = Math.min(...boxes.map((box) => box.x)) * zoom;
     const maxX = Math.max(...boxes.map((box) => box.right)) * zoom;
     const minY = Math.min(...boxes.map((box) => box.y)) * zoom;
