@@ -419,6 +419,7 @@ export function PromptNodeWidget(props: PromptNodeWidgetProps) {
     return (
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start' }}>
             <NodeStyles.Node
+                data-selection-box
                 hovered={isHovered}
                 disabled={model.node.suggested}
                 hasError={hasError}
@@ -514,6 +515,7 @@ export function PromptNodeWidget(props: PromptNodeWidgetProps) {
                 <title>{"Configure Model Provider"}</title>
                 <g>
                     <NodeStyles.StyledCircle
+                        data-selection-satellite="circle"
                         cx="80"
                         cy="24"
                         r="22"

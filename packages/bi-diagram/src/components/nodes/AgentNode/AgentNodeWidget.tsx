@@ -1476,6 +1476,7 @@ export function AgentNodeWidget(props: AgentNodeWidgetProps) {
             </svg>}
 
             <NodeStyles.Box
+                data-selection-box
                 disabled={disabled}
                 hovered={isBoxHovered}
                 hasError={hasError}
@@ -1743,6 +1744,7 @@ export function AgentNodeWidget(props: AgentNodeWidgetProps) {
                     `}
                 >
                     <circle
+                        data-selection-satellite="circle"
                         className="model-provider-circle"
                         cx="80"
                         cy="24"
@@ -1857,6 +1859,7 @@ export function AgentNodeWidget(props: AgentNodeWidgetProps) {
                         >
                             {toolsReadOnly && <title>This tool is packaged with the agent and cannot be edited</title>}
                             <circle
+                                data-selection-satellite="circle"
                                 cx="80"
                                 cy="24"
                                 r="22"

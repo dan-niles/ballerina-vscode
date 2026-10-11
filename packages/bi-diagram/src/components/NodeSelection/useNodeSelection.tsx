@@ -42,6 +42,7 @@ interface Box {
 
 interface Outline extends Box {
     id: string;
+    round?: boolean;
 }
 
 const isEditable = (target: EventTarget | null) =>
@@ -55,8 +56,16 @@ const boxFrom = (x1: number, y1: number, x2: number, y2: number): Box => ({
     bottom: Math.max(y1, y2),
 });
 
+// A node that draws its client beside it marks its own box, so the client is not part of what a marquee must cover.
+const selectionBox = (element: HTMLElement) => element.querySelector<HTMLElement>("[data-selection-box]") ?? element;
+
 const contains = (outer: Box, inner: DOMRect) =>
     inner.width > 0 && inner.left >= outer.left && inner.right <= outer.right && inner.top >= outer.top && inner.bottom <= outer.bottom;
+
+const outlineOf = (id: string, element: Element, round = false): Outline | undefined => {
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 ? { id, left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, round } : undefined;
+};
 
 const sameOutlines = (a: Outline[], b: Outline[]) =>
     a.length === b.length &&
@@ -148,7 +157,7 @@ export function useNodeSelection(
         const hits = (area: Box, base: string[]) => {
             const { model } = live.current;
             const inside = nodeElements(root)
-                .filter((element) => contains(area, element.getBoundingClientRect()))
+                .filter((element) => contains(area, selectionBox(element).getBoundingClientRect()))
                 .map((element) => element.dataset.nodeid)
                 .filter((id) => model && isMovable(model, id));
             return [...new Set([...base, ...inside.flatMap((id) => withInside(model, id))])];
@@ -372,11 +381,17 @@ function SelectionOverlay({ engine, rootRef, selected, boxSink, onDelete }: Sele
         let frame = 0;
         const measure = () => {
             const next = selected
-                .map((id) => {
-                    const rect = find(id)?.getBoundingClientRect();
-                    return rect && rect.width > 0
-                        ? { id, left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }
-                        : undefined;
+                .flatMap((id) => {
+                    const element = find(id);
+                    if (!element) {
+                        return [];
+                    }
+                    const satellites = [...element.querySelectorAll<Element>("[data-selection-satellite]")];
+                    return [
+                        outlineOf(id, selectionBox(element)),
+                        ...satellites.map((satellite, index) =>
+                            outlineOf(`${id}:${index}`, satellite, satellite.getAttribute("data-selection-satellite") === "circle")),
+                    ];
                 })
                 .filter((outline): outline is Outline => !!outline);
             if (sameOutlines(last, next)) {
@@ -466,7 +481,7 @@ function SelectionOverlay({ engine, rootRef, selected, boxSink, onDelete }: Sele
                             top: outline.top - OUTLINE_GAP - view.top,
                             width: outline.right - outline.left + OUTLINE_GAP * 2,
                             height: outline.bottom - outline.top + OUTLINE_GAP * 2,
-                            borderRadius: 10,
+                            borderRadius: outline.round ? "50%" : 10,
                             border: `2px solid ${LINK_HOVERED_COLOR}`,
                             boxSizing: "border-box",
                         }}

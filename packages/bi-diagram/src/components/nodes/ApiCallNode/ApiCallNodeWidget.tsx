@@ -438,6 +438,7 @@ export function ApiCallNodeWidget(props: ApiCallNodeWidgetProps) {
     return (
         <NodeStyles.Node readOnly={readOnly}>
             <NodeStyles.Box
+                data-selection-box
                 disabled={disabled}
                 hovered={isBoxHovered}
                 hasError={hasError}
@@ -536,6 +537,7 @@ export function ApiCallNodeWidget(props: ApiCallNodeWidgetProps) {
             >
                 {isWorkflowTarget ? (
                     <rect
+                        data-selection-satellite="square"
                         x="58"
                         y="2"
                         width="44"
@@ -548,6 +550,7 @@ export function ApiCallNodeWidget(props: ApiCallNodeWidgetProps) {
                     />
                 ) : (
                 <circle
+                    data-selection-satellite="circle"
                     cx="80"
                     cy="24"
                     r="22"
