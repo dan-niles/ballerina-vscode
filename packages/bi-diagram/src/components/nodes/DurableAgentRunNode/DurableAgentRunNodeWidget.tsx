@@ -1085,6 +1085,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
         return (
             <NodeStyles.Node data-testid="durable-agent-run-draft-node" readOnly={readOnly}>
                 <NodeStyles.Box
+                    data-selection-box
                     disabled={true}
                     hovered={isBoxHovered}
                     hasError={hasError}
@@ -1128,6 +1129,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
         return (
             <NodeStyles.Node data-testid="durable-agent-run-compact-node" readOnly={readOnly}>
                 <NodeStyles.Box
+                    data-selection-box
                     disabled={disabled}
                     hovered={isBoxHovered}
                     hasError={hasError}
@@ -1192,6 +1194,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
         return (
             <NodeStyles.Node data-testid="durable-agent-run-node" readOnly={readOnly}>
                 <NodeStyles.Box
+                    data-selection-box
                     disabled={disabled}
                     hovered={isBoxHovered && !isOpenAgentHovered}
                     hasError={hasError}
@@ -1317,6 +1320,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                                 <g onClick={readOnly ? undefined : () => onCapabilityClick(item)} css={capabilityHitStyle(!readOnly)}>
                                     <rect x={hasSenders ? 196 : 40} y="2" width={hasSenders ? 48 : 203} height={hasSenders ? 64 : 44} fill="transparent" style={{ pointerEvents: "all" }} />
                                     <circle
+                                        data-selection-satellite="circle"
                                         data-testid={`durable-agent-capability-${item.kind}-${sanitizeId(itemName)}`}
                                         className="capability-circle"
                                         cx="220"
@@ -1527,6 +1531,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                 {/* durable agent model circle */}
                 <g>
                     <circle
+                        data-selection-satellite="circle"
                         cx="80"
                         cy="24"
                         r="22"
@@ -1587,6 +1592,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                             <g onClick={clickable ? () => onCapabilityClick(item) : undefined} css={capabilityHitStyle(clickable)}>
                                 <rect x="58" y="2" width={sideSvgWidth - 58} height="44" fill="transparent" style={{ pointerEvents: "all" }} />
                                 <circle
+                                    data-selection-satellite="circle"
                                     data-testid={`durable-agent-capability-${item.kind}-${sanitizeId(itemName)}`}
                                     className="capability-circle"
                                     cx="80"

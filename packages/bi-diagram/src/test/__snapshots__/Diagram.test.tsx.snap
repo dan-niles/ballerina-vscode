@@ -6646,6 +6646,7 @@ exports[`BI Diagram - Snapshot Tests renders all nodes flow correctly: all-nodes
           >
             <div
               class="css-42"
+              data-selection-box="true"
             >
               <div
                 class="port css-19"
@@ -6730,6 +6731,7 @@ exports[`BI Diagram - Snapshot Tests renders all nodes flow correctly: all-nodes
               <circle
                 cx="80"
                 cy="24"
+                data-selection-satellite="circle"
                 fill="var(--vscode-menu-background)"
                 opacity="1"
                 r="22"
@@ -11296,6 +11298,7 @@ exports[`BI Diagram - Snapshot Tests renders complex flow correctly: complex-flo
           >
             <div
               class="css-38"
+              data-selection-box="true"
             >
               <div
                 class="port css-19"
@@ -11380,6 +11383,7 @@ exports[`BI Diagram - Snapshot Tests renders complex flow correctly: complex-flo
               <circle
                 cx="80"
                 cy="24"
+                data-selection-satellite="circle"
                 fill="var(--vscode-menu-background)"
                 opacity="1"
                 r="22"
@@ -11823,6 +11827,7 @@ exports[`BI Diagram - Snapshot Tests renders complex flow correctly: complex-flo
           >
             <div
               class="css-38"
+              data-selection-box="true"
             >
               <div
                 class="port css-19"
@@ -11905,6 +11910,7 @@ exports[`BI Diagram - Snapshot Tests renders complex flow correctly: complex-flo
               <circle
                 cx="80"
                 cy="24"
+                data-selection-satellite="circle"
                 fill="var(--vscode-menu-background)"
                 opacity="1"
                 r="22"

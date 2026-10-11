@@ -466,6 +466,7 @@ export function CallActivityNodeWidget(props: CallActivityNodeWidgetProps) {
             onMouseLeave={() => setIsHovered(false)}
         >
             <S.Node
+                data-selection-box
                 hovered={isHovered}
                 disabled={model.node.suggested}
                 hasError={hasError}
@@ -609,6 +610,7 @@ export function CallActivityNodeWidget(props: CallActivityNodeWidgetProps) {
                                 </marker>
                             </defs>
                             <circle
+                                data-selection-satellite="circle"
                                 cx="80"
                                 cy={24 + offsetY}
                                 r="22"
