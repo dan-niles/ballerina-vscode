@@ -33,6 +33,7 @@ import io.ballerina.projects.PackageOrg;
 import io.ballerina.projects.PackageVersion;
 import io.ballerina.projects.Project;
 import io.ballerina.projects.ProjectEnvironmentBuilder;
+import io.ballerina.projects.ResolvedPackageDependency;
 import io.ballerina.projects.bala.BalaProject;
 import io.ballerina.projects.directory.BuildProject;
 import io.ballerina.projects.environment.PackageMetadataResponse;
@@ -211,6 +212,7 @@ public class PackageUtil {
     private static final ConcurrentHashMap<Path, SoftReference<Package>> BALA_PACKAGES = new ConcurrentHashMap<>();
 
     private static final Set<String> PREWARMED = ConcurrentHashMap.newKeySet();
+    private static final String AI_PACKAGE = "ai";
 
     private static Optional<Package> loadBalaPackage(Path balaPath) {
         Package[] balaPackage = new Package[1];
@@ -239,6 +241,24 @@ public class PackageUtil {
             CompletableFuture.runAsync(() -> resolveModulePackage(org, packageName, version)
                     .ifPresent(PackageUtil::getCompilation));
         }
+    }
+
+    /**
+     * Compiles the project's {@code ballerina/ai} dependency in the background, since agent nodes and the agent's
+     * forms build their templates from it.
+     *
+     * @param project The project whose resolved {@code ballerina/ai} version to compile
+     */
+    public static void prewarmAgentLibrary(Project project) {
+        project.currentPackage().getResolution().dependencyGraph().getNodes().stream()
+                .map(ResolvedPackageDependency::packageInstance)
+                .filter(pkg -> pkg.packageOrg().value().equals(CommonUtils.BALLERINA_ORG_NAME)
+                        && pkg.packageName().value().equals(AI_PACKAGE))
+                .findFirst()
+                // A project without the dependency yet gets the version its first agent template resolves.
+                .ifPresentOrElse(
+                        pkg -> prewarm(CommonUtils.BALLERINA_ORG_NAME, AI_PACKAGE, pkg.packageVersion().toString()),
+                        () -> prewarm(CommonUtils.BALLERINA_ORG_NAME, AI_PACKAGE, null));
     }
 
     /**
@@ -430,6 +450,29 @@ public class PackageUtil {
             return Optional.empty();
         }
         return Optional.of(resolutionResponse.get().resolvedPackage().project().sourceRoot());
+    }
+
+    /**
+     * Whether the exact package version resolves from the local repositories alone, without contacting Central.
+     *
+     * @param org     The package organization
+     * @param name    The package name
+     * @param version The exact package version
+     * @return true if the package is available offline
+     */
+    public static boolean isAvailableOffline(String org, String name, String version) {
+        if (org == null || name == null || version == null) {
+            return false;
+        }
+        try {
+            PackageResolver packageResolver =
+                    getSampleProject().projectEnvironmentContext().getService(PackageResolver.class);
+            ResolutionRequest request = ResolutionRequest.from(PackageDescriptor.from(PackageOrg.from(org),
+                    PackageName.from(name), PackageVersion.from(version)));
+            return resolveResponse(packageResolver, request, true).isPresent();
+        } catch (RuntimeException e) {
+            return false;
+        }
     }
 
     /**
