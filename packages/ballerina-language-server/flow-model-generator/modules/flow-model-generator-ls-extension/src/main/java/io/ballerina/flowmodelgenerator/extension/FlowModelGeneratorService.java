@@ -86,6 +86,7 @@ import io.ballerina.projects.Document;
 import io.ballerina.projects.DocumentId;
 import io.ballerina.projects.Module;
 import io.ballerina.projects.Project;
+import io.ballerina.projects.ProjectException;
 import io.ballerina.projects.ProjectKind;
 import io.ballerina.tools.text.LinePosition;
 import io.ballerina.tools.text.LineRange;
@@ -98,7 +99,9 @@ import org.ballerinalang.langserver.LSClientLogger;
 import org.ballerinalang.langserver.LSPackageLoader;
 import org.ballerinalang.langserver.common.utils.PathUtil;
 import org.ballerinalang.langserver.commons.LanguageServerContext;
+import org.ballerinalang.langserver.commons.eventsync.exceptions.EventSyncException;
 import org.ballerinalang.langserver.commons.service.spi.ExtendedLanguageServerService;
+import org.ballerinalang.langserver.commons.workspace.WorkspaceDocumentException;
 import org.ballerinalang.langserver.commons.workspace.WorkspaceManager;
 import org.ballerinalang.langserver.commons.workspace.WorkspaceManagerProxy;
 import org.eclipse.lsp4j.jsonrpc.services.JsonRequest;
@@ -627,16 +630,8 @@ public class FlowModelGeneratorService implements ExtendedLanguageServerService 
                 if (semanticModel.isEmpty() || document.isEmpty()) {
                     return response;
                 }
-                Document source = null;
-                if (request.sourceFilePath() != null) {
-                    try {
-                        Path sourcePath = Path.of(request.sourceFilePath());
-                        workspaceManager.loadProject(sourcePath);
-                        source = workspaceManager.document(sourcePath).orElse(null);
-                    } catch (Exception e) {
-                        // The copy source only helps choose imports; the paste goes on without it.
-                    }
-                }
+                Document source = request.sourceFilePath() == null ? null
+                        : copySource(workspaceManager, Path.of(request.sourceFilePath()));
                 LSPackageLoader packages = LSPackageLoader.getInstance(serverContext);
                 List<String> visibleModules = Stream.of(packages.getDistributionRepoModules(),
                                 packages.getLocalRepoModules(), packages.getRemoteRepoModules())
@@ -660,6 +655,16 @@ public class FlowModelGeneratorService implements ExtendedLanguageServerService 
     @JsonRequest
     public CompletableFuture<Boolean> canPasteFlowNodes(FlowNodesPasteRequest request) {
         return CompletableFuture.supplyAsync(() -> PasteNodesHandler.isPasteable(request.text()));
+    }
+
+    // The copy source only helps choose imports; one that cannot be loaded is skipped.
+    private static Document copySource(WorkspaceManager workspaceManager, Path sourcePath) {
+        try {
+            workspaceManager.loadProject(sourcePath);
+        } catch (ProjectException | WorkspaceDocumentException | EventSyncException e) {
+            return null;
+        }
+        return workspaceManager.document(sourcePath).orElse(null);
     }
 
     private static Map<Path, List<org.eclipse.lsp4j.TextEdit>> toEditsByPath(JsonElement textEdits) {
