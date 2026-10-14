@@ -4406,7 +4406,7 @@ export function BIFlowDiagram(props: BIFlowDiagramProps) {
                 {(showProgressIndicator || fetchingAiSuggestions) && model && (
                     <ProgressIndicator color={ThemeColors.PRIMARY} />
                 )}
-                <Container onClickCapture={blockStaleInput} onMouseDownCapture={blockStaleInput}>
+                <Container onClickCapture={blockStaleInput} onMouseDownCapture={blockStaleInput} onPointerDownCapture={blockStaleInput}>
                     {(!model || !durableUsagesLoaded) && <DiagramSkeleton />}
                     {model && durableUsagesLoaded && <MemoizedDiagram {...memoizedDiagramProps} />}
                 </Container>
