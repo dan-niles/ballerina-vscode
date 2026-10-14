@@ -17,7 +17,7 @@
  */
 
 import { capabilityValueText, seedCapabilityValue, SeedableProperty, showActivityIdentityReadOnly } from "./capabilityFieldValues";
-import { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import { SyntheticEvent, useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { useRpcContext } from "@wso2/ballerina-rpc-client";
 import styled from "@emotion/styled";
 import { goToAgent, startAddAgentTrigger, startAddDurableEventTrigger, startAgentChat } from "../AIChatAgent/utils";
@@ -90,7 +90,7 @@ import {
 import { PanelOverlayProvider } from "./context/PanelOverlayContext";
 import { PanelOverlayRenderer } from "./PanelOverlayRenderer";
 import { ExpressionFormField, Category as PanelCategory, S } from "@wso2/ballerina-side-panel";
-import { cacheLibrarySection, cachedLibrarySection, PAGINATED_LIBRARY_SECTIONS } from "../../../utils/useFunctionPagination";
+import { cacheLibrarySection, cachedLibrarySection, librarySectionScope, PAGINATED_LIBRARY_SECTIONS } from "../../../utils/useFunctionPagination";
 import { cloneDeep, debounce } from "lodash";
 import { ConnectionKind } from "../../../components/ConnectionSelector";
 import AddAgentPopup from "../AIChatAgent/AddAgentPopup";
@@ -195,6 +195,13 @@ export function BIFlowDiagram(props: BIFlowDiagramProps) {
     modelRef.current = model;
     // Responses can arrive out of order; only the latest request reflects the newest source.
     const latestFetchRef = useRef(0);
+    const refreshingRef = useRef(false);
+    // A silent refresh leaves the old flow on screen, and its positions are stale until the new one lands.
+    const blockStaleInput = (event: SyntheticEvent) => {
+        if (refreshingRef.current) {
+            event.stopPropagation();
+        }
+    };
     const [suggestedModel, setSuggestedModel] = useState<Flow>();
     const [showSidePanel, setShowSidePanel] = useState(false);
     const [sidePanelView, setSidePanelView] = useState<SidePanelView>(SidePanelView.NODE_LIST);
@@ -947,6 +954,7 @@ export function BIFlowDiagram(props: BIFlowDiagramProps) {
         }
         skippedRefreshRef.current = false;
         const fetchId = ++latestFetchRef.current;
+        refreshingRef.current = true;
         // Refreshing a flow already on screen must not blank the title bar actions or lock the canvas.
         if (!modelRef.current) {
             setShowProgressIndicator(true);
@@ -1032,6 +1040,7 @@ export function BIFlowDiagram(props: BIFlowDiagramProps) {
                         if (fetchId !== latestFetchRef.current) {
                             return;
                         }
+                        refreshingRef.current = false;
                         setShowProgressIndicator(false);
                         setShowProgressSpinner(false);
                         onReady(undefined, undefined, undefined);
@@ -1525,12 +1534,12 @@ export function BIFlowDiagram(props: BIFlowDiagramProps) {
                 response.categories as Category[],
                 FUNCTION_TYPE.REGULAR
             ));
-        const cacheScope = `call-function|${projectPath}`;
         const sectionTitles = PAGINATED_LIBRARY_SECTIONS.map(({ title }) => title);
         const localCategories = await searchPage({ excludeLibrary: "true" });
         if (panelNavEpochRef.current !== navEpoch) {
             return false;
         }
+        const cacheScope = librarySectionScope(`call-function|${projectPath}`, localCategories);
         const sections = sectionTitles.map((title): PanelCategory =>
             cachedLibrarySection(cacheScope, title) ?? { title, description: "", items: [], isLoading: true }
         );
@@ -4397,7 +4406,7 @@ export function BIFlowDiagram(props: BIFlowDiagramProps) {
                 {(showProgressIndicator || fetchingAiSuggestions) && model && (
                     <ProgressIndicator color={ThemeColors.PRIMARY} />
                 )}
-                <Container>
+                <Container onClickCapture={blockStaleInput} onMouseDownCapture={blockStaleInput}>
                     {(!model || !durableUsagesLoaded) && <DiagramSkeleton />}
                     {model && durableUsagesLoaded && <MemoizedDiagram {...memoizedDiagramProps} />}
                 </Container>
