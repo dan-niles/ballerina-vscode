@@ -82,7 +82,9 @@ export interface CreatedBuiltInAgent {
 
 export const fetchAgentNodeTemplate = async (
     rpcClient: BallerinaRpcClient,
-    projectPath: string
+    projectPath: string,
+    templateFilePath: string = projectPath,
+    templatePosition?: LinePosition
 ): Promise<FlowNode> => {
     const aiModuleOrg = await getAiModuleOrg(rpcClient);
     const agentSearchResponse = await rpcClient.getBIDiagramRpcClient().search({
@@ -94,7 +96,7 @@ export const fetchAgentNodeTemplate = async (
     if (!agentNode) {
         throw new Error("No agent node found in search response");
     }
-    return getNodeTemplate(rpcClient, agentNode.codedata, projectPath);
+    return getNodeTemplate(rpcClient, agentNode.codedata, templateFilePath, templatePosition);
 };
 
 export const ZERO_LINE_RANGE: LineRange = { startLine: { line: 0, offset: 0 }, endLine: { line: 0, offset: 0 } };
@@ -704,6 +706,58 @@ export const removeMcpServerFromAgentNode = (agentNode: FlowNode, toolkitNameToR
     updatedAgentNode.properties.tools.value = toolsValue;
     return updatedAgentNode;
 };
+
+let agentToolsEdits: Promise<unknown> = Promise.resolve();
+
+// Each edit writes back the whole tool list, so two in flight would drop each other's tool.
+export const serializeAgentToolsEdit = <T>(edit: () => Promise<T>): Promise<T> => {
+    const run = agentToolsEdits.then(edit, edit);
+    agentToolsEdits = run.then((): undefined => undefined, (): undefined => undefined);
+    return run;
+};
+
+// A panel's agent copy dates from when it opened, so it misses tools saved since.
+export const withCurrentAgentTools = async (
+    agentNode: FlowNode,
+    rpcClient: BallerinaRpcClient
+): Promise<{ node: FlowNode; current: boolean }> => {
+    const node = cloneDeep(agentNode);
+    const agentVarName = node?.properties?.variable?.value;
+    if (typeof agentVarName !== "string" || !agentVarName) {
+        return { node, current: false };
+    }
+    const latest = await findFlowNodeByModuleVarName(agentVarName, rpcClient);
+    if (latest?.codedata?.node !== "AGENT" || !latest.properties?.tools || !node.properties?.tools) {
+        return { node, current: false };
+    }
+    node.properties.tools.value = cloneDeep(latest.properties.tools.value);
+    if (latest.codedata.lineRange) {
+        node.codedata.lineRange = latest.codedata.lineRange;
+    }
+    return { node, current: true };
+};
+
+export const saveToolOnAgent = (
+    agentNode: FlowNode,
+    toolName: string,
+    rpcClient: BallerinaRpcClient,
+    artifacts?: ProjectStructureArtifactResponse[]
+): Promise<FlowNode | null> =>
+    serializeAgentToolsEdit(async () => {
+        const { node, current } = await withCurrentAgentTools(agentNode, rpcClient);
+        const updatedAgentNode = await addToolToAgentNode(node, toolName);
+        if (!updatedAgentNode) {
+            return null;
+        }
+        if (!current) {
+            await refreshAgentNodeLineRange(updatedAgentNode, rpcClient, artifacts);
+        }
+        const { filePath } = await rpcClient.getVisualizerRpcClient().joinProjectPath({
+            segments: [updatedAgentNode.codedata.lineRange.fileName],
+        });
+        await rpcClient.getBIDiagramRpcClient().getSourceCode({ filePath, flowNode: updatedAgentNode });
+        return updatedAgentNode;
+    });
 
 export const addToolToAgentNode = async (agentNode: FlowNode, toolName: string) => {
     if (!agentNode || agentNode.codedata?.node !== "AGENT") return null;

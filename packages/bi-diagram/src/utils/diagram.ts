@@ -43,14 +43,44 @@ import { CallActivityNodeFactory } from "../components/nodes/CallActivityNode";
 import { SendDataNodeFactory } from "../components/nodes/SendDataNode";
 import { WaitDataNodeFactory } from "../components/nodes/WaitDataNode";
 
+type CanvasIndex = { canvas: HTMLElement; nodes: Map<string, HTMLElement>; ports: Map<string, HTMLElement> };
+let canvasIndex: CanvasIndex | undefined;
+
+// Every port is measured in the same task after a render; a canvas-wide query per port made opening a large flow quadratic.
+function indexCanvas(canvas: HTMLElement): CanvasIndex {
+    if (canvasIndex?.canvas !== canvas) {
+        const nodes = new Map<string, HTMLElement>();
+        const ports = new Map<string, HTMLElement>();
+        canvas.querySelectorAll<HTMLElement>(".node[data-nodeid], .port[data-nodeid]").forEach((element) => {
+            const id = element.dataset.nodeid;
+            if (element.classList.contains("node") && !nodes.has(id)) {
+                nodes.set(id, element);
+            }
+            const key = `${id}\u0000${element.dataset.name}`;
+            if (element.classList.contains("port") && !ports.has(key)) {
+                ports.set(key, element);
+            }
+        });
+        canvasIndex = { canvas, nodes, ports };
+        setTimeout(() => (canvasIndex = undefined));
+    }
+    return canvasIndex;
+}
+
+// An element the index missed or that left the canvas since it was built is looked up directly.
+function canvasElement(canvas: HTMLElement, cached: HTMLElement | undefined, selector: string): HTMLElement | null {
+    return cached?.isConnected && canvas.contains(cached) ? cached : canvas.querySelector<HTMLElement>(selector);
+}
+
 // The canvas eases pan and zoom with a CSS transition; a port read against its own node, which shares that transform, stays exact.
 export function portOffset(engine: DiagramEngine, port: PortModel): { x: number; y: number; width: number; height: number } | undefined {
     const canvas = engine.getCanvas();
     const node = port.getParent();
-    const nodeElement = canvas?.querySelector<HTMLElement>(`.node[data-nodeid="${CSS.escape(node.getID())}"]`);
-    const portElement = canvas?.querySelector<HTMLElement>(
-        `.port[data-nodeid="${CSS.escape(node.getID())}"][data-name="${CSS.escape(port.getName())}"]`
-    );
+    const index = canvas && indexCanvas(canvas);
+    const nodeElement = canvas && canvasElement(canvas, index.nodes.get(node.getID()),
+        `.node[data-nodeid="${CSS.escape(node.getID())}"]`);
+    const portElement = canvas && canvasElement(canvas, index.ports.get(`${node.getID()}\u0000${port.getName()}`),
+        `.port[data-nodeid="${CSS.escape(node.getID())}"][data-name="${CSS.escape(port.getName())}"]`);
     if (!nodeElement || !portElement || !nodeElement.offsetWidth) {
         return undefined;
     }
