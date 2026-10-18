@@ -1104,7 +1104,8 @@ export class BiDiagramRpcManager implements BIDiagramAPI {
         }
         const artifacts = await updateSourceCode({
             textEdits: response.textEdits,
-            description: `Flow Node Deletion - ${params.flowNodes.length} nodes`,
+            description: `Flow Node Deletion - ${params.flowNodes.length === 1
+                ? params.flowNodes[0].metadata.label : `${params.flowNodes.length} nodes`}`,
             skipPayloadCheck: true,
             preformatted: response.formatted,
         });

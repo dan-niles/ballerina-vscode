@@ -109,9 +109,13 @@ export function useMovePreview(
             if (!targets) {
                 return false;
             }
-            if (targets.length === 1 && deleter.current) {
+            if (manyDeleter.current) {
+                if (!(await manyDeleter.current(deletionOrder(targets)))) {
+                    return false;
+                }
+            } else if (targets.length === 1 && deleter.current) {
                 await deleter.current(targets[0]);
-            } else if (!manyDeleter.current || !(await manyDeleter.current(deletionOrder(targets)))) {
+            } else {
                 return false;
             }
             await landing();

@@ -47,10 +47,10 @@ import { BaseNodeModel } from "./nodes/BaseNode";
 import { useAgentFocusFit } from "./nodes/AgentWidget/useAgentFocusFit";
 import { PopupOverlay } from "./PopupOverlay";
 import { AgentNodeActions } from "./AgentNodeActions";
-import { DeleteNodesHandler, MoveNodeHandler, useNodeDrag } from "./NodeDrag/useNodeDrag";
+import { DeleteNodesHandler, isMovable, MoveNodeHandler, useNodeDrag } from "./NodeDrag/useNodeDrag";
 import { useNodeSelection } from "./NodeSelection/useNodeSelection";
 import { useMovePreview } from "./NodeDrag/useMovePreview";
-import { targetAfter } from "./NodeDrag/flowMoves";
+import { outermost, targetAfter } from "./NodeDrag/flowMoves";
 
 export type { AgentNodeActions } from "./AgentNodeActions";
 
@@ -166,16 +166,21 @@ export function Diagram(props: DiagramProps) {
     const movePreview = useMovePreview(model, onMoveNode, onDeleteNode, onDeleteNodes, !isReadOnly);
     const selectionRef = useRef<string[]>([]);
     const nodeDrag = useNodeDrag(diagramEngine, diagramModel, canvasRootRef, movePreview.actions, onUndo, () => selectionRef.current);
+    const removeNodes =
+        onDeleteNodes && movePreview.actions?.remove
+            ? async (nodes: FlowNode[]) => {
+                  // The rest of the flow glides into the space the deleted nodes leave.
+                  nodeDrag.expectRedraw();
+                  const removed = await movePreview.actions.remove(nodes);
+                  if (removed) {
+                      nodeDrag.announceDelete(nodes);
+                  }
+                  return removed;
+              }
+            : undefined;
     const nodeSelection = useNodeSelection(diagramEngine, diagramModel, canvasRootRef, {
         enabled: !isReadOnly,
-        onDelete:
-            onDeleteNodes && movePreview.actions?.remove
-                ? (nodes) => {
-                      // The rest of the flow glides into the space the deleted nodes leave.
-                      nodeDrag.expectRedraw();
-                      return movePreview.actions.remove(nodes);
-                  }
-                : undefined,
+        onDelete: removeNodes,
     });
     selectionRef.current = nodeSelection.selected;
 
@@ -366,6 +371,11 @@ export function Diagram(props: DiagramProps) {
     };
 
     const { afterMoves } = movePreview;
+    // A node in the selection stands for the whole selection.
+    const selectionOf = (node: FlowNode): FlowNode[] =>
+        nodeSelection.selected.includes(node.id) && diagramModel
+            ? outermost(nodeSelection.selected.map((id) => isMovable(diagramModel, id)).filter((item): item is FlowNode => !!item))
+            : [node];
     const addAt = (parent: FlowNode | Branch, target: LineRange, fresh: FlowNode | Branch): LineRange => {
         const at = fresh === parent ? undefined : targetAfter(fresh);
         return at ? { startLine: at, endLine: at } : target;
@@ -386,7 +396,12 @@ export function Diagram(props: DiagramProps) {
             onAddNodePrompt &&
             ((parent, target, prompt, options) =>
                 afterMoves(parent, (fresh) => onAddNodePrompt(fresh, addAt(parent, target, fresh), prompt, options))),
-        onDeleteNode: onDeleteNode && ((node) => afterMoves(node, onDeleteNode)),
+        onDeleteNode:
+            onDeleteNode &&
+            ((node) =>
+                removeNodes && diagramModel && isMovable(diagramModel, node.id)
+                    ? void removeNodes(selectionOf(node))
+                    : afterMoves(node, onDeleteNode)),
         onAddComment: onAddComment,
         onNodeSelect: onNodeSelect && ((node) => afterMoves(node, onNodeSelect)),
         onNodeSave: onNodeSave,

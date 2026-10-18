@@ -2931,22 +2931,24 @@ export function BIFlowDiagram(props: BIFlowDiagramProps) {
         getFlowModel();
     };
 
+    // The canvas already shows the flow without the nodes and later actions wait for it, so no lock or progress bar.
     const handleOnDeleteNodes = async (nodes: FlowNode[]): Promise<boolean> => {
-        setShowProgressIndicator(true);
         const response = await rpcClient
             .getBIDiagramRpcClient()
             .deleteFlowNodes({ filePath: model.fileName, flowNodes: nodes })
             .catch((error): UpdatedArtifactsResponse => ({ artifacts: [], error: String(error) }));
         if (response.error) {
             console.error(">>> Error deleting nodes", response);
-            setShowProgressIndicator(false);
+            // Not awaited: the preview puts the nodes back at once, not when the message is dismissed.
+            void rpcClient.getCommonRpcClient().showErrorMessage({
+                message: `Failed to delete ${nodes.length > 1 ? `${nodes.length} nodes` : "the node"}. ${response.error}`,
+            });
             return false;
         }
         await updateArtifactLocation(response);
         selectedNodeRef.current = undefined;
         resetNodeSelectionStates();
         clearRefreshTimers();
-        setShowProgressIndicator(true);
         getFlowModel();
         return true;
     };
