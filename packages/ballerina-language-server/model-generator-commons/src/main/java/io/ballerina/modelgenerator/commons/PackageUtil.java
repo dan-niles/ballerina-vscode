@@ -69,6 +69,8 @@ import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 import java.util.logging.Level;
@@ -141,13 +143,7 @@ public class PackageUtil {
     private static final PerThread<PackageRepository> LOCAL_REPOSITORY = new PerThread<>(() -> BallerinaUserHome.from(
             getSampleProject().projectEnvironmentContext().environment()).localPackageRepository());
 
-    /**
-     * A value per thread, keyed by the {@link Thread} itself rather than held in a {@link ThreadLocal}: the JDK's
-     * common-pool workers ({@code InnocuousForkJoinWorkerThread}) erase every ThreadLocal after each task, which
-     * rebuilt the sample project on every LS request. Weak keys let a dead thread's value be collected.
-     *
-     * @param <T> the per-thread value
-     */
+    // Not a ThreadLocal: common-pool workers erase those after each task; weak keys free a dead thread's value.
     private static final class PerThread<T> {
 
         private final Map<Thread, T> values = Collections.synchronizedMap(new WeakHashMap<>());
@@ -240,6 +236,12 @@ public class PackageUtil {
     private static final ConcurrentHashMap<Path, SoftReference<Package>> BALA_PACKAGES = new ConcurrentHashMap<>();
 
     private static final Set<String> PREWARMED = ConcurrentHashMap.newKeySet();
+    // Central lookups and library compiles can take minutes, and the common pool serves the LS requests.
+    private static final ExecutorService PREWARM_EXECUTOR = Executors.newCachedThreadPool(runnable -> {
+        Thread thread = new Thread(runnable, "library-prewarm");
+        thread.setDaemon(true);
+        return thread;
+    });
     private static final String AI_PACKAGE = "ai";
     private static final String WORKFLOW_PACKAGE = "workflow";
 
@@ -268,7 +270,7 @@ public class PackageUtil {
     public static void prewarm(String org, String packageName, String version) {
         if (PREWARMED.add(org + "/" + packageName + ":" + version)) {
             CompletableFuture.runAsync(() -> resolveModulePackage(org, packageName, version)
-                    .ifPresent(PackageUtil::getCompilation));
+                    .ifPresent(PackageUtil::getCompilation), PREWARM_EXECUTOR);
         }
     }
 
@@ -287,18 +289,15 @@ public class PackageUtil {
                             && pkg.packageName().value().equals(library))
                     .findFirst()
                     .map(pkg -> pkg.packageVersion().toString());
-            if (resolved.isPresent()) {
-                prewarm(CommonUtils.BALLERINA_ORG_NAME, library, resolved.get());
-            } else {
-                prewarmLatestRelease(CommonUtils.BALLERINA_ORG_NAME, library);
-            }
+            resolved.ifPresentOrElse(version -> prewarm(CommonUtils.BALLERINA_ORG_NAME, library, version),
+                    () -> prewarmLatestRelease(CommonUtils.BALLERINA_ORG_NAME, library));
         }
     }
 
     private static void prewarmLatestRelease(String org, String packageName) {
         if (PREWARMED.add(org + "/" + packageName + ":latest")) {
             CompletableFuture.runAsync(() -> resolveModulePackage(org, packageName,
-                    latestReleaseOrNull(org, packageName)).ifPresent(PackageUtil::getCompilation));
+                    latestReleaseOrNull(org, packageName)).ifPresent(PackageUtil::getCompilation), PREWARM_EXECUTOR);
         }
     }
 

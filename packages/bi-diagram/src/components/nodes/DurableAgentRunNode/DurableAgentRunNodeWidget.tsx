@@ -474,14 +474,6 @@ function RowMenuButton({ onOpen }: { onOpen: RowMenuOpener }) {
     );
 }
 
-function SvgRowMenuButton({ x, y, onOpen }: { x: number; y: number; onOpen: RowMenuOpener }) {
-    return (
-        <foreignObject x={x} y={y} width={ROW_MENU_SIZE} height={ROW_MENU_SIZE}>
-            <RowMenuButton onOpen={onOpen} />
-        </foreignObject>
-    );
-}
-
 interface UsageRowProps {
     usage: AgentUsage;
     index: number;
@@ -500,7 +492,12 @@ function UsageRow({ usage, index, boxEdgeX, codedata, markerId, targetY = 25, an
         <g
             data-testid="durable-agent-usage-row"
             transform={`translate(0, ${index * AGENT_USAGE_ROW_PITCH})`}
-            onClick={() => onOpen(usage)}
+            onClick={(event) => {
+                // A double-click's second click belongs to whatever was here first, e.g. a deleted trigger.
+                if (event.detail <= 1) {
+                    onOpen(usage);
+                }
+            }}
             css={css`
                 cursor: pointer;
                 > g {
@@ -799,15 +796,13 @@ function CapabilityAddTile({ kind, anchorX, y, side, show, readOnly, onAdd }: Ca
 }
 
 // One menu for every capability and trigger row: rows hand it their items, and it opens upward near the bottom edge.
-function useRowMenu(readOnly: boolean) {
+function useRowMenu() {
     const [rowMenu, setRowMenu] = useState<{ anchor: HTMLElement | SVGSVGElement; items: Item[] } | null>(null);
     const origin = useMemo(() => menuOrigin(rowMenu?.anchor ?? null, rowMenu?.items.length ?? 0), [rowMenu]);
     const close = () => setRowMenu(null);
     const openWith = (items: Item[]): RowMenuOpener => (event) => {
         event.stopPropagation();
-        if (!readOnly) {
-            setRowMenu({ anchor: event.currentTarget, items: items.map((item) => ({ ...item, onClick: () => { close(); item.onClick(); } })) });
-        }
+        setRowMenu({ anchor: event.currentTarget, items: items.map((item) => ({ ...item, onClick: () => { close(); item.onClick(); } })) });
     };
     const popover = (
         <Popover
@@ -873,7 +868,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
     const [menuButtonElement, setMenuButtonElement] = useState<HTMLElement | null>(null);
 
     const isMenuOpen = menuPos !== null;
-    const { openWith: openRowMenu, popover: rowMenuPopover } = useRowMenu(readOnly);
+    const { openWith: openRowMenu, popover: rowMenuPopover } = useRowMenu();
 
     const getMenuPos = (el: HTMLElement): { top: number; left: number } => {
         const rect = el.getBoundingClientRect();
@@ -1006,6 +1001,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
         label: `Delete ${triggerScopeNoun(usage.trigger?.scope)}`,
         onClick: () => agentNode.onDeleteTrigger(usage, model.node),
     }]);
+    const rowTriggerMenu = agentNode?.onDeleteTrigger && !isAgentReference ? triggerMenu : undefined;
 
     const startAdding = (kind: AddableCapability) => {
         if (readOnly) {
@@ -1394,7 +1390,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                             animate={animatesUsages(nodeMetadata)}
                             onOpen={openUsage}
                             onAddTrigger={triggerHost.onAddTrigger}
-                            onMenu={agentNode?.onDeleteTrigger && !isAgentReference ? triggerMenu : undefined}
+                            onMenu={rowTriggerMenu}
                         />
                     </g>
                     {leftItems.map((item: CapabilityItem, index: number) => {
@@ -1414,7 +1410,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                                     readOnly={readOnly}
                                     onOpen={openUsage}
                                     onAddTrigger={eventTriggerHost.addFor(item)}
-                                    onMenu={agentNode?.onDeleteTrigger && !isAgentReference ? triggerMenu : undefined}
+                                    onMenu={rowTriggerMenu}
                                 />
                             </g>
                         );
@@ -1475,7 +1471,11 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                                         <title>{itemName}</title>
                                     </text>
                                     {/* A captioned circle has its menu at the top-right; otherwise it sits before the label. */}
-                                    {hasMenu && hasSenders && <SvgRowMenuButton x={232} y={-8} onOpen={capabilityMenu(item)} />}
+                                    {hasMenu && hasSenders && (
+                                        <foreignObject x={232} y={-8} width={ROW_MENU_SIZE} height={ROW_MENU_SIZE}>
+                                            <RowMenuButton onOpen={capabilityMenu(item)} />
+                                        </foreignObject>
+                                    )}
                                     {hasMenu && !hasSenders && (
                                         <MenuBeforeLabels y={12} size={ROW_MENU_SIZE}>
                                             <RowMenuButton onOpen={capabilityMenu(item)} />

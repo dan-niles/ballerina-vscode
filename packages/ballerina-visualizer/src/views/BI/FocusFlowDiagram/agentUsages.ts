@@ -587,9 +587,10 @@ export function deleteComponentAt(
 // The service and the listeners in its file go in one edit; listeners elsewhere are deleted after it.
 export async function deleteServiceWithListeners(
     rpcClient: BallerinaRpcClient,
-    trigger: AgentUsageTrigger
+    trigger: AgentUsageTrigger,
+    designModel?: CDModel
 ): Promise<void> {
-    const model = await currentDesignModel(rpcClient);
+    const model = designModel ?? await currentDesignModel(rpcClient);
     const together = trigger.listeners
         .filter((listener) => samePath(listener.documentUri, trigger.documentUri))
         .map((listener) => ({ listener, position: findListenerPosition(model, listener.symbol, listener.documentUri) }))
@@ -711,6 +712,21 @@ function toNodePosition(node: FlowNode): NodePosition {
     };
 }
 
+const entryPointsOf = (service: CDService) => [...(service.resourceFunctions ?? []), ...(service.remoteFunctions ?? [])];
+
+const entryPointLabel = (service: CDService, fn: CDResourceFunction | CDFunction) =>
+    "accessor" in fn ? (modulePrefix(service.type) === "ai" ? "Agent Chat" : resourceLabel(fn.accessor, fn.path)) : fn.name;
+
+// Earlier deletions move code, so a service and its entry point are found again by name, not by line.
+function findEntryPoint(model: CDModel | undefined, name: string, documentUri: string, label?: string) {
+    const service = (model?.services ?? [])
+        .find((candidate) => serviceName(candidate) === name && samePath(candidate.location.filePath, documentUri));
+    const entryPoint = service && label !== undefined
+        ? entryPointsOf(service).find((fn) => entryPointLabel(service, fn) === label)
+        : undefined;
+    return { service, entryPoint };
+}
+
 async function currentDesignModel(rpcClient: BallerinaRpcClient): Promise<CDModel | undefined> {
     const location = await rpcClient.getVisualizerLocation();
     return (await rpcClient.getBIDiagramRpcClient().getDesignModel({ projectPath: location?.projectPath }))
@@ -725,13 +741,22 @@ export async function removeAgentTrigger(
     trigger: AgentUsageTrigger,
     choice: TriggerDeletionChoice
 ): Promise<void> {
-    if (choice === "endpoint" && trigger.scope === "ENTRY_POINT_BODY") {
-        await clearAgentCallFromHandler(rpcClient, trigger);
+    const model = await currentDesignModel(rpcClient);
+    const { service, entryPoint } = findEntryPoint(model, trigger.serviceName, trigger.documentUri, trigger.entryPoint?.label);
+    if (!service || (trigger.entryPoint && !entryPoint)) {
+        throw new Error(`${trigger.entryPoint?.label ?? trigger.serviceName} was not found`);
+    }
+    const current: AgentUsageTrigger = {
+        ...trigger,
+        position: toPosition(service.location),
+        entryPoint: entryPoint ? { ...trigger.entryPoint, position: toPosition(entryPoint.location) } : trigger.entryPoint,
+    };
+    if (choice === "endpoint" && current.scope === "ENTRY_POINT_BODY") {
+        await clearAgentCallFromHandler(rpcClient, current);
     } else if (choice === "endpoint") {
-        const entryPoint = trigger.entryPoint;
-        await deleteComponentAt(rpcClient, entryPoint.label, entryPoint.documentUri, entryPoint.position);
+        await deleteComponentAt(rpcClient, current.entryPoint.label, current.entryPoint.documentUri, current.entryPoint.position);
     } else {
-        await deleteServiceWithListeners(rpcClient, trigger);
+        await deleteServiceWithListeners(rpcClient, current, model);
     }
     await rpcClient.getAIAgentRpcClient().fixMissingImports();
 }
@@ -739,16 +764,13 @@ export async function removeAgentTrigger(
 // Deletes the entry point that sends to a removed data event, and its service when nothing else is left in it.
 export async function deleteEventSender(rpcClient: BallerinaRpcClient, sender: AgentUsage): Promise<void> {
     const model = await currentDesignModel(rpcClient);
-    const members = (service: CDService) => [...(service.resourceFunctions ?? []), ...(service.remoteFunctions ?? [])];
-    const service = (model?.services ?? []).find((candidate) => members(candidate).some((member) =>
-        samePath(member.location.filePath, sender.documentUri)
-        && toPosition(member.location).startLine === sender.position?.startLine));
-    if (!service) {
+    const { service, entryPoint } = findEntryPoint(model, sender.serviceName, sender.documentUri, sender.label);
+    if (!entryPoint) {
         return;
     }
-    if (members(service).length === 1) {
-        await deleteServiceWithListeners(rpcClient, triggerFor(model, service));
+    if (entryPointsOf(service).length === 1) {
+        await deleteServiceWithListeners(rpcClient, triggerFor(model, service), model);
     } else {
-        await deleteComponentAt(rpcClient, sender.label, sender.documentUri, sender.position);
+        await deleteComponentAt(rpcClient, sender.label, sender.documentUri, toPosition(entryPoint.location));
     }
 }
