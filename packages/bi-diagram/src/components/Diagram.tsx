@@ -215,10 +215,14 @@ export function Diagram(props: DiagramProps) {
         });
     const removeNodes =
         onDeleteNodes && movePreview.actions?.remove
-            ? (nodes: FlowNode[]) => {
+            ? async (nodes: FlowNode[], announce = true) => {
                   // The rest of the flow glides into the space the deleted nodes leave.
                   nodeDrag.expectRedraw();
-                  return movePreview.actions.remove(nodes);
+                  const removed = await movePreview.actions.remove(nodes);
+                  if (removed && announce) {
+                      nodeDrag.announceDelete(nodes);
+                  }
+                  return removed;
               }
             : undefined;
     // A cut deletes only once the copy has read the statements' text.
@@ -435,6 +439,11 @@ export function Diagram(props: DiagramProps) {
     };
 
     const { afterMoves } = movePreview;
+    // A node in the selection stands for the whole selection.
+    const selectionOf = (node: FlowNode): FlowNode[] =>
+        nodeSelection.selected.includes(node.id) && diagramModel
+            ? outermost(nodeSelection.selected.map((id) => isMovable(diagramModel, id)).filter((item): item is FlowNode => !!item))
+            : [node];
     const addAt = (parent: FlowNode | Branch, target: LineRange, fresh: FlowNode | Branch): LineRange => {
         const at = fresh === parent ? undefined : targetAfter(fresh);
         return at ? { startLine: at, endLine: at } : target;
@@ -455,7 +464,12 @@ export function Diagram(props: DiagramProps) {
             onAddNodePrompt &&
             ((parent, target, prompt, options) =>
                 afterMoves(parent, (fresh) => onAddNodePrompt(fresh, addAt(parent, target, fresh), prompt, options))),
-        onDeleteNode: onDeleteNode && ((node) => afterMoves(node, onDeleteNode)),
+        onDeleteNode:
+            onDeleteNode &&
+            ((node) =>
+                removeNodes && diagramModel && isMovable(diagramModel, node.id)
+                    ? void removeNodes(selectionOf(node))
+                    : afterMoves(node, onDeleteNode)),
         onPasteAt: onPasteNodes && !isReadOnly && canPaste ? pasteAt : undefined,
         canPaste,
         onNodeClipboard:

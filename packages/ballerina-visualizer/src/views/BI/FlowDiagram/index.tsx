@@ -20,7 +20,7 @@ import { capabilityValueText, seedCapabilityValue, SeedableProperty, showActivit
 import { SyntheticEvent, useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { useRpcContext } from "@wso2/ballerina-rpc-client";
 import styled from "@emotion/styled";
-import { goToAgent, startAddAgentTrigger, startAddDurableEventTrigger, startAgentChat } from "../AIChatAgent/utils";
+import { goToAgent, hideDeletingTools, startAddAgentTrigger, startAddDurableEventTrigger, startAgentChat } from "../AIChatAgent/utils";
 import { DIAGRAM_REFRESH_DEBOUNCE_MS } from "../diagramRefreshDebounce";
 import { MemoizedDiagram } from "@wso2/bi-diagram";
 import {
@@ -2931,22 +2931,24 @@ export function BIFlowDiagram(props: BIFlowDiagramProps) {
         getFlowModel();
     };
 
+    // The canvas already shows the flow without the nodes and later actions wait for it, so no lock or progress bar.
     const handleOnDeleteNodes = async (nodes: FlowNode[]): Promise<boolean> => {
-        setShowProgressIndicator(true);
         const response = await rpcClient
             .getBIDiagramRpcClient()
             .deleteFlowNodes({ filePath: model.fileName, flowNodes: nodes })
             .catch((error): UpdatedArtifactsResponse => ({ artifacts: [], error: String(error) }));
         if (response.error) {
             console.error(">>> Error deleting nodes", response);
-            setShowProgressIndicator(false);
+            // Not awaited: the preview puts the nodes back at once, not when the message is dismissed.
+            void rpcClient.getCommonRpcClient().showErrorMessage({
+                message: `Failed to delete ${nodes.length > 1 ? `${nodes.length} nodes` : "the node"}. ${response.error}`,
+            });
             return false;
         }
         await updateArtifactLocation(response);
         selectedNodeRef.current = undefined;
         resetNodeSelectionStates();
         clearRefreshTimers();
-        setShowProgressIndicator(true);
         getFlowModel();
         return true;
     };
@@ -4214,8 +4216,15 @@ export function BIFlowDiagram(props: BIFlowDiagramProps) {
             setSelectedNodeId(node?.id);
         },
         onLoadingChange: setShowProgressIndicator,
+        // Unlike the agent view, flows keep the canvas locked while a tool deletion saves.
+        onBackgroundSaveChange: setShowProgressIndicator,
         onChat: handleOnChatWithAgent,
     });
+
+    const { syncDeletingTools } = agentEditor;
+    useEffect(() => {
+        syncDeletingTools(model);
+    }, [model, syncDeletingTools]);
 
     const prevAgentViewRef = useRef<AgentEditorView>("NONE");
     useEffect(() => {
@@ -4354,7 +4363,7 @@ export function BIFlowDiagram(props: BIFlowDiagramProps) {
     const agentOnlyView = !!hideAgentConfiguration && !!flowModel?.nodes?.some(isDurableAgentBoxNode);
     const durableUsagesLoaded = useDurableAgentUsages(agentOnlyView, model, projectPath, setModel);
     const displayModel = useMemo(
-        () => (agentOnlyView
+        () => hideDeletingTools(agentOnlyView
             ? {
                 ...flowModel,
                 nodes: [
@@ -4362,8 +4371,8 @@ export function BIFlowDiagram(props: BIFlowDiagramProps) {
                     ...flowModel.nodes.filter(isDurableAgentBoxNode),
                 ],
             }
-            : flowModel),
-        [flowModel, agentOnlyView]
+            : flowModel, agentEditor.deletingTools),
+        [flowModel, agentOnlyView, agentEditor.deletingTools]
     );
 
     // No RHS side panel in the agent-only view: node clicks (the Start pill) are inert;

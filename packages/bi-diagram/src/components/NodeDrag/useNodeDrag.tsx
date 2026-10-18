@@ -18,7 +18,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { DiagramEngine, DiagramModel, NodeModel, PortModel } from "@projectstorm/react-diagrams";
-import { Icon } from "@wso2/ui-toolkit";
+import { Codicon, Icon } from "@wso2/ui-toolkit";
 import { FlowNode, LinePosition } from "../../utils/types";
 import { NodeLinkModel } from "../NodeLink";
 import { EmptyNodeModel } from "../nodes/EmptyNode";
@@ -116,8 +116,6 @@ interface Bin {
 }
 
 interface Toast {
-    x: number;
-    y: number;
     text: string;
 }
 
@@ -533,6 +531,8 @@ export function useNodeDrag(
         }
     }, []);
     useEffect(() => () => clearTimeout(toastTimer.current), []);
+    const announceDelete = useCallback((nodes: FlowNode[]) =>
+        showToast({ text: `Deleted ${nodes.length > 1 ? `${nodes.length} nodes` : nameOf(nodes[0])}` }), [showToast]);
 
     const hasModel = !!model;
     useEffect(() => {
@@ -739,7 +739,7 @@ export function useNodeDrag(
                 const name = session.group.length > 1 ? `${session.group.length} nodes` : nameOf(session.flowNode);
                 live.current.actions
                     ?.remove?.(session.group)
-                    .then((removed) => removed && showToast({ x: binned.x, y: binned.y, text: `Deleted ${name}` }))
+                    .then((removed) => removed && showToast({ text: `Deleted ${name}` }))
                     .catch(() => undefined);
                 return;
             }
@@ -1071,10 +1071,19 @@ export function useNodeDrag(
         </div>
     );
 
-    const toastView = toast && (
+    const toastArea = toast && rootRef.current ? viewRect(rootRef.current) : undefined;
+    // Anchored to the canvas's bottom centre, away from the nodes it reports on.
+    const toastView = toast && toastArea && (
         <div
             data-testid="node-delete-toast"
-            style={{ ...panel, left: toast.x - BIN_SIZE / 2, top: toast.y - BIN_SIZE / 2, gap: 4, padding: "0 6px 0 14px" }}
+            style={{
+                ...panel,
+                left: (toastArea.left + toastArea.right) / 2,
+                top: toastArea.bottom - BIN_SIZE - 16,
+                transform: "translateX(-50%)",
+                gap: 4,
+                padding: "0 6px 0 14px",
+            }}
         >
             <span>{toast.text}</span>
             {onUndo && (
@@ -1097,6 +1106,23 @@ export function useNodeDrag(
                     Undo
                 </button>
             )}
+            <button
+                data-testid="node-delete-toast-dismiss"
+                aria-label="Dismiss"
+                title="Dismiss"
+                onClick={() => showToast(undefined)}
+                style={{
+                    display: "flex",
+                    border: "none",
+                    borderRadius: 12,
+                    padding: 4,
+                    cursor: "pointer",
+                    color: "var(--vscode-foreground)",
+                    background: "transparent",
+                }}
+            >
+                <Codicon name="close" />
+            </button>
         </div>
     );
 
@@ -1108,5 +1134,5 @@ export function useNodeDrag(
         </>
     );
 
-    return { overlay, onRedraw, prepare, expectRedraw };
+    return { overlay, onRedraw, prepare, expectRedraw, announceDelete };
 }
