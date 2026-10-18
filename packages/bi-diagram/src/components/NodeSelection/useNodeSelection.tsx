@@ -145,8 +145,8 @@ export function useNodeSelection(
         }
         const gesture = canvasGesture(engine);
         let drag: { pointerId: number; x: number; y: number; moved: boolean; base: string[] } | null = null;
-        // Focus falls back to the body after a click anywhere, so the body counts as the canvas only after a press on it.
-        let pressedOnCanvas = false;
+        // Keys on the body belong to the canvas: a flow just opened, or the last press landed on it.
+        let pressedOnCanvas = true;
         const onCanvas = (target: EventTarget | null) =>
             target === document.body ? pressedOnCanvas : target instanceof Node && root.contains(target);
         const setBox = (area: Box | null) => boxSink.current(area);
