@@ -18,7 +18,7 @@
 
 /** @jsxImportSource @emotion/react */
 import { isCapabilityApprovalGated } from "./capabilityApproval";
-import React, { ReactNode, useEffect, useState } from "react";
+import React, { ReactNode, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import styled from "@emotion/styled";
 import { css } from "@emotion/react";
@@ -46,7 +46,7 @@ import {
     NODE_TEXT_COLOR,
     NODE_WIDTH,
 } from "../../../resources/constants";
-import { Button, Icon, Item, Menu, MenuItem, ThemeColors, getAIModuleIcon, DefaultLlmIcon } from "@wso2/ui-toolkit";
+import { Button, Icon, Item, Menu, MenuItem, Popover, ThemeColors, getAIModuleIcon, DefaultLlmIcon } from "@wso2/ui-toolkit";
 import { MoreVertIcon } from "../../../resources/icons";
 import { AgentData, FlowNode, ToolData } from "../../../utils/types";
 import NodeIcon, { DurableAgentIcon } from "../../NodeIcon";
@@ -56,10 +56,10 @@ import { useDiagramContext, useNodeClipboardItems } from "../../DiagramContext";
 import { DiagnosticsPopUp } from "../../DiagnosticsPopUp";
 import { getResultVariableName, nodeHasError } from "../../../utils/node";
 import { BreakpointMenu } from "../../BreakNodeMenu/BreakNodeMenu";
-import { AgentUsage, NodeMetadata } from "@wso2/ballerina-core";
+import { AgentUsage, DEFAULT_MODEL_PROVIDER_LABEL, isDefaultModelProviderExpr, NodeMetadata, triggerScopeNoun } from "@wso2/ballerina-core";
 import { MarkdownWithTooltip } from "../AgentMarkdownTooltip";
 import { AgentReferenceRow } from "../AgentWidget/AgentReferenceRow";
-import { EdgeAddButton, UsageIcon, usageFadeIn } from "../AgentNode/AgentNodeWidget";
+import { EdgeAddButton, MenuBeforeLabels, menuOrigin, USAGE_SERVICE_LABEL_MAX, UsageIcon, usageFadeIn } from "../AgentNode/AgentNodeWidget";
 import {
     AGENT_USAGE_ROW_LIMIT,
     AGENT_USAGE_ROW_PITCH,
@@ -440,6 +440,48 @@ function usageDash(usage: AgentUsage): string | undefined {
     return usage.channel ? "2 4" : undefined;
 }
 
+const ROW_MENU_SIZE = 24;
+
+type RowMenuOpener = (event: React.MouseEvent<HTMLElement | SVGSVGElement>) => void;
+
+const rowMenuReveal = css`
+    &:hover .row-menu-button {
+        opacity: 1;
+        visibility: visible;
+    }
+`;
+
+function RowMenuButton({ onOpen }: { onOpen: RowMenuOpener }) {
+    return (
+        <NodeStyles.MenuButton
+            appearance="icon"
+            className="row-menu-button"
+            onClick={onOpen}
+            css={css`
+                flex-shrink: 0;
+                padding: 2px;
+                height: ${ROW_MENU_SIZE}px;
+                width: ${ROW_MENU_SIZE}px;
+                min-width: ${ROW_MENU_SIZE}px;
+                opacity: 0;
+                visibility: hidden;
+                transition: opacity 0.2s ease-in-out;
+                pointer-events: all;
+            `}
+        >
+            <MoreVertIcon />
+        </NodeStyles.MenuButton>
+    );
+}
+
+function SvgRowMenuButton({ x, y, onOpen }: { x: number; y: number; onOpen: RowMenuOpener }) {
+    return (
+        <foreignObject x={x} y={y} width={ROW_MENU_SIZE} height={ROW_MENU_SIZE}>
+            <RowMenuButton onOpen={onOpen} />
+        </foreignObject>
+    );
+}
+
 interface UsageRowProps {
     usage: AgentUsage;
     index: number;
@@ -449,9 +491,10 @@ interface UsageRowProps {
     targetY?: number;
     animationDelay?: number;
     onOpen: (usage: AgentUsage) => void;
+    onMenu?: (usage: AgentUsage) => RowMenuOpener;
 }
 
-function UsageRow({ usage, index, boxEdgeX, codedata, markerId, targetY = 25, animationDelay, onOpen }: UsageRowProps) {
+function UsageRow({ usage, index, boxEdgeX, codedata, markerId, targetY = 25, animationDelay, onOpen, onMenu }: UsageRowProps) {
     const title = [usage.serviceLabel ?? usage.typeLabel, usage.label].filter(Boolean).join(" — ");
     return (
         <g
@@ -469,16 +512,18 @@ function UsageRow({ usage, index, boxEdgeX, codedata, markerId, targetY = 25, an
                 &:hover text {
                     fill: ${NODE_BORDER_SELECTED_COLOR};
                 }
+                ${rowMenuReveal}
             `}
         >
             <g>
+                <rect x="0" y="0" width={USAGE_SQUARE_X + 45} height="48" fill="transparent" style={{ pointerEvents: "all" }} />
                 <rect className="usage-square" x={USAGE_SQUARE_X} y="2" width="44" height="44" rx="10" fill={NODE_BG_COLOR} stroke={NODE_BORDER_COLOR} strokeWidth={1.5} />
                 <foreignObject x={USAGE_SQUARE_X + 10} y="12" width="44" height="44" fill={NODE_TEXT_COLOR} style={{ pointerEvents: "none" }}>
                     <div className="connector-icon"><UsageIcon usage={usage} codedata={codedata} /></div>
                 </foreignObject>
                 {usage.serviceLabel && (
                     <text x={USAGE_TEXT_RIGHT_X} y={USAGE_TEXT_CENTER_Y - USAGE_LINE_GAP / 2} textAnchor="end" fill={NODE_TEXT_COLOR} opacity={0.7} fontSize="12px" fontFamily="monospace" dominantBaseline="middle">
-                        {usage.serviceLabel.length > 32 ? `${usage.serviceLabel.slice(0, 32)}...` : usage.serviceLabel}
+                        {usage.serviceLabel.length > USAGE_SERVICE_LABEL_MAX ? `${usage.serviceLabel.slice(0, USAGE_SERVICE_LABEL_MAX)}...` : usage.serviceLabel}
                     </text>
                 )}
                 <text x={USAGE_TEXT_RIGHT_X} y={usage.serviceLabel ? USAGE_TEXT_CENTER_Y + USAGE_LINE_GAP / 2 : USAGE_TEXT_CENTER_Y} textAnchor="end" fill={NODE_TEXT_COLOR} fontSize="14px" fontFamily="GilmerRegular" dominantBaseline="middle">
@@ -486,6 +531,11 @@ function UsageRow({ usage, index, boxEdgeX, codedata, markerId, targetY = 25, an
                     <title>{title}</title>
                 </text>
                 <path d={`M ${USAGE_SQUARE_X + 45} 25 H ${USAGE_SQUARE_X + 57} V ${targetY} H ${boxEdgeX}`} fill="none" style={{ stroke: NODE_TEXT_COLOR, strokeWidth: 1.5, strokeDasharray: usageDash(usage), markerEnd: `url(#${markerId})` }} />
+                {onMenu && (
+                    <MenuBeforeLabels y={12} size={ROW_MENU_SIZE}>
+                        <RowMenuButton onOpen={onMenu(usage)} />
+                    </MenuBeforeLabels>
+                )}
             </g>
         </g>
     );
@@ -500,6 +550,7 @@ interface UsageRowsProps {
     animate: boolean;
     onOpen: (usage: AgentUsage) => void;
     onAddTrigger: () => void;
+    onMenu?: (usage: AgentUsage) => RowMenuOpener;
 }
 
 function durableTriggerHost(
@@ -536,7 +587,7 @@ function durableEventTriggerHost(
     return { offered, addFor: (item) => (offered ? add(item) : undefined) };
 }
 
-function UsageRows({ column, boxEdgeX, codedata, markerId, readOnly, animate, onOpen, onAddTrigger }: UsageRowsProps) {
+function UsageRows({ column, boxEdgeX, codedata, markerId, readOnly, animate, onOpen, onAddTrigger, onMenu }: UsageRowsProps) {
     const stagger = (row: number) => (animate ? row * USAGE_ROW_STAGGER_MS : undefined);
     return (
         <>
@@ -550,6 +601,7 @@ function UsageRows({ column, boxEdgeX, codedata, markerId, readOnly, animate, on
                     markerId={markerId}
                     animationDelay={stagger(index)}
                     onOpen={onOpen}
+                    onMenu={!readOnly && usage.trigger ? onMenu : undefined}
                 />
             ))}
             {column.hidden > 0 && (
@@ -585,15 +637,13 @@ interface ChannelSendersProps {
     readOnly: boolean;
     onOpen: (usage: AgentUsage) => void;
     onAddTrigger?: () => void;
+    onMenu?: (usage: AgentUsage) => RowMenuOpener;
 }
 
 const capabilityHitStyle = (clickable: boolean) => css`
     cursor: ${clickable ? "pointer" : "default"};
     .capability-circle {
         transition: stroke 0.4s ease-out;
-    }
-    &:hover .open-flow {
-        opacity: 1;
     }
     ${clickable
         ? css`
@@ -619,29 +669,10 @@ const CapabilityLabel = styled.div`
     white-space: nowrap;
 `;
 
-const OpenFlowButton = styled.div`
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    border: 1px solid ${ThemeColors.OUTLINE_VARIANT};
-    border-radius: 6px;
-    color: ${ThemeColors.ON_SURFACE};
-    cursor: pointer;
-    pointer-events: all;
-    opacity: 0;
-    transition: opacity 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
-    &:hover {
-        border-color: ${ThemeColors.PRIMARY};
-        background-color: ${ThemeColors.SURFACE_BRIGHT};
-    }
-`;
-
 const SENDER_TRUNK_X = USAGE_SQUARE_X + 57;
 const SENDER_TILE_CENTER_Y = 11;
 
-function ChannelSenders({ channel, senders, circleOffset, circleEdgeX, codedata, markerId, animate, readOnly, onOpen, onAddTrigger }: ChannelSendersProps) {
+function ChannelSenders({ channel, senders, circleOffset, circleEdgeX, codedata, markerId, animate, readOnly, onOpen, onAddTrigger, onMenu }: ChannelSendersProps) {
     const visible = senders.slice(0, AGENT_USAGE_ROW_LIMIT);
     const hidden = senders.length - visible.length;
     const rows = visible.length + (hidden > 0 ? 1 : 0);
@@ -660,6 +691,7 @@ function ChannelSenders({ channel, senders, circleOffset, circleEdgeX, codedata,
                     markerId={markerId}
                     animationDelay={stagger(index)}
                     onOpen={onOpen}
+                    onMenu={!readOnly && usage.trigger ? onMenu : undefined}
                 />
             ))}
             {hidden > 0 && (
@@ -766,6 +798,63 @@ function CapabilityAddTile({ kind, anchorX, y, side, show, readOnly, onAdd }: Ca
     );
 }
 
+// One menu for every capability and trigger row: rows hand it their items, and it opens upward near the bottom edge.
+function useRowMenu(readOnly: boolean) {
+    const [rowMenu, setRowMenu] = useState<{ anchor: HTMLElement | SVGSVGElement; items: Item[] } | null>(null);
+    const origin = useMemo(() => menuOrigin(rowMenu?.anchor ?? null, rowMenu?.items.length ?? 0), [rowMenu]);
+    const close = () => setRowMenu(null);
+    const openWith = (items: Item[]): RowMenuOpener => (event) => {
+        event.stopPropagation();
+        if (!readOnly) {
+            setRowMenu({ anchor: event.currentTarget, items: items.map((item) => ({ ...item, onClick: () => { close(); item.onClick(); } })) });
+        }
+    };
+    const popover = (
+        <Popover
+            open={rowMenu !== null}
+            anchorEl={rowMenu?.anchor}
+            anchorOrigin={origin}
+            transformOrigin={origin}
+            handleClose={close}
+            sx={{ padding: 0, borderRadius: 0 }}
+        >
+            <Menu>
+                {rowMenu?.items.map((item) => <MenuItem key={item.id} item={item} />)}
+            </Menu>
+        </Popover>
+    );
+    return { openWith, popover };
+}
+
+function ModelProviderLabel({ name, readOnly, onClick }: { name?: string; readOnly: boolean; onClick: () => void }) {
+    const fullName = isDefaultModelProviderExpr(name) ? DEFAULT_MODEL_PROVIDER_LABEL : name;
+    if (!fullName) {
+        return null;
+    }
+    return (
+        <text
+            x="110"
+            y="28"
+            textAnchor="start"
+            fill={NODE_TEXT_COLOR}
+            fontSize="14px"
+            fontFamily="GilmerRegular"
+            dominantBaseline="middle"
+            onClick={onClick}
+            css={css`
+                cursor: ${readOnly ? "default" : "pointer"};
+                transition: fill 0.4s ease-out;
+                &:hover {
+                    fill: ${readOnly ? NODE_TEXT_COLOR : NODE_BORDER_SELECTED_COLOR};
+                }
+            `}
+        >
+            {fullName.length > 20 ? `${fullName.slice(0, 20)}...` : fullName}
+            <title>{fullName}</title>
+        </text>
+    );
+}
+
 export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps) {
     const { model, engine, onClick } = props;
     const { onNodeSelect, goToSource, onDeleteNode, removeBreakpoint, addBreakpoint, agentNode, readOnly, selectedNodeId, openView } =
@@ -784,6 +873,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
     const [menuButtonElement, setMenuButtonElement] = useState<HTMLElement | null>(null);
 
     const isMenuOpen = menuPos !== null;
+    const { openWith: openRowMenu, popover: rowMenuPopover } = useRowMenu(readOnly);
 
     const getMenuPos = (el: HTMLElement): { top: number; left: number } => {
         const rect = el.getBoundingClientRect();
@@ -878,11 +968,16 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
     const isApprovalGated = (item: CapabilityItem) =>
         isCapabilityApprovalGated((item.data as any)?.values);
 
-    const onCapabilityClick = (item: CapabilityItem) => {
-        if (readOnly) {
+    const isPending = (item: CapabilityItem) => Boolean((item.data as any)?.pending);
+
+    const editCapability = (item: CapabilityItem) => agentNode?.onEditCapability?.(model.node, { ...item.data, type: item.kind });
+
+    const onCapabilityClick = (item: CapabilityItem) => (event: React.MouseEvent<SVGGElement>) => {
+        // A double-click's second click belongs to whatever was here first, e.g. a removed capability.
+        if (readOnly || isPending(item) || event.detail > 1) {
             return;
         }
-        agentNode?.onEditCapability?.(model.node, { ...item.data, type: item.kind });
+        editCapability(item);
     };
 
     const flowOpener = (item: CapabilityItem): (() => void) | undefined => {
@@ -893,13 +988,24 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
         return () => agentNode.goToTool({ name: functionName } as ToolData, model.node);
     };
 
-    const onCapabilityDelete = (item: CapabilityItem) => (event: React.MouseEvent<SVGGElement>) => {
-        if (readOnly) {
-            return;
-        }
-        event.stopPropagation();
-        agentNode?.onDeleteCapability?.(model.node, { ...item.data, type: item.kind });
+    const capabilityMenu = (item: CapabilityItem): RowMenuOpener => {
+        const openFlow = flowOpener(item);
+        return openRowMenu([
+            ...(item.kind !== "tool" ? [{ id: "edit", label: "Edit", onClick: () => editCapability(item) }] : []),
+            ...(openFlow ? [{ id: "view", label: "View", onClick: openFlow }] : []),
+            ...(agentNode?.onDeleteCapability ? [{
+                id: "delete",
+                label: "Delete",
+                onClick: () => agentNode.onDeleteCapability(model.node, { ...item.data, type: item.kind }),
+            }] : []),
+        ]);
     };
+
+    const triggerMenu = (usage: AgentUsage): RowMenuOpener => openRowMenu([{
+        id: "deleteTrigger",
+        label: `Delete ${triggerScopeNoun(usage.trigger?.scope)}`,
+        onClick: () => agentNode.onDeleteTrigger(usage, model.node),
+    }]);
 
     const startAdding = (kind: AddableCapability) => {
         if (readOnly) {
@@ -1036,6 +1142,9 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
             // capabilities with a configured deadline.)
             return <NodeIcon type="WAIT_DATA" size={24} />;
         }
+        if ((item.data as any).mcp) {
+            return <Icon name="bi-mcp" sx={{ width: 24, height: 24, fontSize: 24 }} />;
+        }
         if (item.data.path) {
             return (
                 <ConnectorIcon
@@ -1060,6 +1169,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                 borderRadius: 0,
             }}
             onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
         >
             <Menu>
                 <>
@@ -1284,6 +1394,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                             animate={animatesUsages(nodeMetadata)}
                             onOpen={openUsage}
                             onAddTrigger={triggerHost.onAddTrigger}
+                            onMenu={agentNode?.onDeleteTrigger && !isAgentReference ? triggerMenu : undefined}
                         />
                     </g>
                     {leftItems.map((item: CapabilityItem, index: number) => {
@@ -1303,6 +1414,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                                     readOnly={readOnly}
                                     onOpen={openUsage}
                                     onAddTrigger={eventTriggerHost.addFor(item)}
+                                    onMenu={agentNode?.onDeleteTrigger && !isAgentReference ? triggerMenu : undefined}
                                 />
                             </g>
                         );
@@ -1314,11 +1426,13 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                         const itemName = item.data.name;
                         const hasSenders = rows.leftSenders[index] > 0;
                         const top = durableLeftCircleTop(rows, index, containerHeight) + durableSlotCircleOffset(rows.leftSenders[index]);
+                        const hasMenu = !readOnly && !isPending(item);
+                        const hitX = hasSenders ? 196 : 0;
                         return (
-                            <g key={`${item.kind}-${itemName}-${index}`} transform={`translate(${columnShift}, ${top})`}>
+                            <g key={`${item.kind}-${itemName}-${index}`} transform={`translate(${columnShift}, ${top})`} opacity={isPending(item) ? 0.55 : undefined}>
                                 {/* The circle and its label are one target; a captioned circle's target reaches down to the caption. */}
-                                <g onClick={readOnly ? undefined : () => onCapabilityClick(item)} css={capabilityHitStyle(!readOnly)}>
-                                    <rect x={hasSenders ? 196 : 40} y="2" width={hasSenders ? 48 : 203} height={hasSenders ? 64 : 44} fill="transparent" style={{ pointerEvents: "all" }} />
+                                <g onClick={readOnly ? undefined : onCapabilityClick(item)} css={[capabilityHitStyle(!readOnly && !isPending(item)), rowMenuReveal]}>
+                                    <rect x={hitX} y="2" width={243 - hitX} height={hasSenders ? 64 : 44} fill="transparent" style={{ pointerEvents: "all" }} />
                                     <circle
                                         data-selection-satellite="circle"
                                         data-testid={`durable-agent-capability-${item.kind}-${sanitizeId(itemName)}`}
@@ -1360,22 +1474,13 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                                         {itemName.length > 20 ? `${itemName.slice(0, 20)}...` : itemName}
                                         <title>{itemName}</title>
                                     </text>
-                                </g>
-
-                                <g
-                                    transform="translate(236, 8)"
-                                    onClick={onCapabilityDelete(item)}
-                                    css={css`
-                                        cursor: ${readOnly ? "default" : "pointer"};
-                                        opacity: 0.75;
-                                        &:hover {
-                                            opacity: 1;
-                                        }
-                                    `}
-                                >
-                                    <title>Remove</title>
-                                    <circle cx="0" cy="0" r="7" fill={NODE_BG_COLOR} stroke={NODE_BORDER_COLOR} strokeWidth={1} />
-                                    <text x="0" y="2.8" textAnchor="middle" fontSize="9" fill={NODE_TEXT_COLOR}>✕</text>
+                                    {/* A captioned circle has its menu at the top-right; otherwise it sits before the label. */}
+                                    {hasMenu && hasSenders && <SvgRowMenuButton x={232} y={-8} onOpen={capabilityMenu(item)} />}
+                                    {hasMenu && !hasSenders && (
+                                        <MenuBeforeLabels y={12} size={ROW_MENU_SIZE}>
+                                            <RowMenuButton onOpen={capabilityMenu(item)} />
+                                        </MenuBeforeLabels>
+                                    )}
                                 </g>
 
                                 <line
@@ -1424,8 +1529,10 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                 isSelected={isSelected}
                 onMouseEnter={() => setIsBoxHovered(true)}
                 onMouseLeave={() => setIsBoxHovered(false)}
+                onClick={!readOnly ? handleOnClick : undefined}
                 onContextMenu={!readOnly ? handleOnContextMenu : undefined}
                 title="Configure Agent"
+                style={{ cursor: readOnly ? "default" : "pointer" }}
             >
                 {hasBreakpoint && (
                     <div
@@ -1444,15 +1551,15 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                 <NodeStyles.TopPortWidget port={model.getPort("in")!} engine={engine} />
                 <NodeStyles.Column style={{ height: `${model.node.viewState?.ch}px` }}>
                     <NodeStyles.Row readOnly={readOnly}>
-                        <NodeStyles.Icon onClick={handleOnClick}>
+                        <NodeStyles.Icon>
                             <DurableAgentIcon size={24} />
                         </NodeStyles.Icon>
                         <NodeStyles.Row readOnly={readOnly}>
-                            <NodeStyles.Header onClick={handleOnClick}>
+                            <NodeStyles.Header>
                                 <NodeStyles.Title>Durable Agent</NodeStyles.Title>
                                 <NodeStyles.Description>{nodeTitle}</NodeStyles.Description>
                             </NodeStyles.Header>
-                            <NodeStyles.ActionButtonGroup>
+                            <NodeStyles.ActionButtonGroup onClick={(event: React.MouseEvent) => event.stopPropagation()}>
                                 {hasError && <DiagnosticsPopUp node={model.node} engine={engine} />}
                                 <NodeStyles.MenuButton
                                     ref={setMenuButtonElement}
@@ -1470,7 +1577,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
 
                     {
                         sanitizedAgent?.role ? (
-                            <NodeStyles.Row readOnly={readOnly} onClick={handleOnClick}>
+                            <NodeStyles.Row readOnly={readOnly}>
                                 <MarkdownWithTooltip
                                     text={sanitizedAgent.role}
                                     Styled={NodeStyles.Role}
@@ -1479,7 +1586,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                                 />
                             </NodeStyles.Row>
                         ) : (
-                            <NodeStyles.Row readOnly={readOnly} onClick={handleOnClick}>
+                            <NodeStyles.Row readOnly={readOnly}>
                                 <NodeStyles.RolePlaceholder>Define agent's role</NodeStyles.RolePlaceholder>
                             </NodeStyles.Row>
                         )
@@ -1487,7 +1594,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
 
                     {
                         sanitizedAgent?.instructions ? (
-                            <NodeStyles.InstructionsRow readOnly={readOnly} onClick={handleOnClick}>
+                            <NodeStyles.InstructionsRow readOnly={readOnly}>
                                 <MarkdownWithTooltip
                                     text={sanitizedAgent.instructions}
                                     Styled={NodeStyles.Instructions}
@@ -1496,7 +1603,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                                 />
                             </NodeStyles.InstructionsRow>
                         ) : (
-                            <NodeStyles.InstructionsRow readOnly={readOnly} onClick={handleOnClick}>
+                            <NodeStyles.InstructionsRow readOnly={readOnly}>
                                 <NodeStyles.InstructionsPlaceholder>
                                     Provide specific instructions on how the agent should behave.
                                 </NodeStyles.InstructionsPlaceholder>
@@ -1563,6 +1670,8 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                         {getAIModuleIcon(nodeMetadata?.model?.type) ?? (nodeModelIconUrl ? <img src={nodeModelIconUrl} style={{ width: 24, height: 24 }} /> : <Icon name="bi-ai-model" sx={{ fontSize: 24, width: 24, height: 24 }} />)}
                     </foreignObject>
 
+                    <ModelProviderLabel name={nodeMetadata?.model?.name} readOnly={readOnly} onClick={onModelEditClick} />
+
                     <line
                         x1="0"
                         y1="25"
@@ -1581,15 +1690,15 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                 {/* circles for tools and activities */}
                 {rightItems.map((item: CapabilityItem, index: number) => {
                     const itemName = item.data.name;
-                    const clickable = !readOnly && item.kind !== "tool";
-                    const openFlow = flowOpener(item);
+                    const clickable = !readOnly && item.kind !== "tool" && !isPending(item);
                     return (
                         <g
                             key={`${item.kind}-${itemName}-${index}`}
                             transform={`translate(0, ${rowOffsetY(index + 1)})`}
+                            opacity={isPending(item) ? 0.55 : undefined}
                         >
                             {/* The circle, its badge and its label are one target: the label is the easier thing to aim at. */}
-                            <g onClick={clickable ? () => onCapabilityClick(item) : undefined} css={capabilityHitStyle(clickable)}>
+                            <g onClick={clickable ? onCapabilityClick(item) : undefined} css={[capabilityHitStyle(clickable), rowMenuReveal]}>
                                 <rect x="58" y="2" width={sideSvgWidth - 58} height="44" fill="transparent" style={{ pointerEvents: "all" }} />
                                 <circle
                                     data-selection-satellite="circle"
@@ -1637,47 +1746,15 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                                     />
                                 )}
 
-                                {/* HTML for the label so the open-flow button can sit right after text of any width. */}
+                                {/* HTML for the label so the menu button can sit right after text of any width. */}
                                 <foreignObject x="110" y="2" width={sideSvgWidth - 110} height="44" style={{ pointerEvents: "none" }}>
                                     <CapabilityLabel>
                                         <span className="capability-label" title={itemName}>
                                             {itemName.length > 20 ? `${itemName.slice(0, 20)}...` : itemName}
                                         </span>
-                                        {openFlow && (
-                                            <OpenFlowButton
-                                                className="open-flow"
-                                                data-testid={`durable-agent-open-flow-${sanitizeId(itemName)}`}
-                                                title="Open flow"
-                                                onClick={(event: React.MouseEvent) => {
-                                                    event.stopPropagation();
-                                                    openFlow();
-                                                }}
-                                            >
-                                                <Icon
-                                                    name="bi-arrow-outward"
-                                                    sx={{ display: "flex", alignItems: "center", justifyContent: "center", width: 13, height: 13 }}
-                                                    iconSx={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 13, fontSize: 13, lineHeight: 1 }}
-                                                />
-                                            </OpenFlowButton>
-                                        )}
+                                        {!readOnly && !isPending(item) && <RowMenuButton onOpen={capabilityMenu(item)} />}
                                     </CapabilityLabel>
                                 </foreignObject>
-                            </g>
-
-                            <g
-                                transform="translate(96, 8)"
-                                onClick={onCapabilityDelete(item)}
-                                css={css`
-                                    cursor: ${readOnly ? "default" : "pointer"};
-                                    opacity: 0.75;
-                                    &:hover {
-                                        opacity: 1;
-                                    }
-                                `}
-                            >
-                                <title>Remove</title>
-                                <circle cx="0" cy="0" r="7" fill={NODE_BG_COLOR} stroke={NODE_BORDER_COLOR} strokeWidth={1} />
-                                <text x="0" y="2.8" textAnchor="middle" fontSize="9" fill={NODE_TEXT_COLOR}>✕</text>
                             </g>
 
                             <line
@@ -1743,6 +1820,7 @@ export function DurableAgentRunNodeWidget(props: DurableAgentRunNodeWidgetProps)
                     ))}
                 </defs>
             </svg>
+            {rowMenuPopover}
         </NodeStyles.Node>
     );
 }
