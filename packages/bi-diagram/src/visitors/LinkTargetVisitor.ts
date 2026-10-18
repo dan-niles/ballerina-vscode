@@ -40,7 +40,9 @@ export function slotAfter(node: FlowNode): LinePosition {
 export function slotAtBranchStart(branch: Branch): LinePosition {
     const line = branch.codedata.lineRange.startLine;
     if (branch.codedata.node === "WORKER") {
-        return { line: line.line, offset: line.offset + branch.codedata.sourceCode.indexOf("{\n") + 1 }; // HACK: need to fix with LS extension
+        // The brace that ends the header line; files saved with Windows line endings put "\r" before the "\n".
+        const brace = branch.codedata.sourceCode.search(/\{\r?\n/);
+        return { line: line.line, offset: line.offset + brace + 1 }; // HACK: need to fix with LS extension
     }
     return { line: line.line, offset: line.offset + 1 }; // HACK: need to fix with LS extension
 }
