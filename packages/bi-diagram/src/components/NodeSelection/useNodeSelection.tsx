@@ -217,8 +217,8 @@ export function useNodeSelection(
         }
         const gesture = canvasGesture(engine);
         let drag: { pointerId: number; x: number; y: number; moved: boolean; base: string[] } | null = null;
-        // Focus falls back to the body after a click anywhere, so the body counts as the canvas only after a press on it.
-        let pressedOnCanvas = false;
+        // Keys on the body belong to the canvas: a flow just opened, or the last press landed on it.
+        let pressedOnCanvas = true;
         // The selection toolbar and the Paste menu float outside the canvas but act on it.
         const inCanvas = (target: EventTarget | null) =>
             target instanceof Element ? root.contains(target) || !!target.closest("[data-canvas-chrome]") : target instanceof Node && root.contains(target);
