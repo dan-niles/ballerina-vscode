@@ -232,7 +232,7 @@ export function Diagram(props: DiagramProps) {
             await onCopyNodes(nodes);
             checkPaste(true);
             if (cut) {
-                await removeNodes?.(nodes);
+                await removeNodes?.(nodes, false);
             }
         });
     const nodeSelection = useNodeSelection(diagramEngine, diagramModel, canvasRootRef, {
@@ -479,11 +479,7 @@ export function Diagram(props: DiagramProps) {
                           pasteAt(node);
                           return;
                       }
-                      // A node in the selection stands for the whole selection.
-                      const selected = nodeSelection.selected.includes(node.id) && diagramModel
-                          ? outermost(nodeSelection.selected.map((id) => isMovable(diagramModel, id)).filter((item): item is FlowNode => !!item))
-                          : [node];
-                      void copyNodes(selected, action === "cut");
+                      void copyNodes(selectionOf(node), action === "cut");
                   }
                 : undefined,
         onAddComment: onAddComment,
