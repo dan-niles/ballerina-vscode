@@ -18,11 +18,8 @@
 
 import { useState } from "react";
 import { useRpcContext } from "@wso2/ballerina-rpc-client";
-import { AvailableNode, CodeData, FlowNode, LineRange } from "@wso2/ballerina-core";
-import { MarketplaceItem } from "@wso2/wso2-platform-core";
-import { usePlatformExtContext } from "../../providers/platform-ext-ctx-provider";
+import { CodeData, FlowNode, LineRange } from "@wso2/ballerina-core";
 import { CloudKnowledgeBasePage } from "../../views/BI/Connection/DevantConnections/CloudKnowledgeBasePage";
-import { prepareDevantKnowledgeBase } from "../../views/BI/Connection/DevantConnections/devant-kb-utils";
 import { RelativeLoader } from "../RelativeLoader";
 import { LoaderContainer } from "../RelativeLoader/styles";
 
@@ -41,7 +38,6 @@ interface CloudKnowledgeBaseCreatorProps {
 export function CloudKnowledgeBaseCreator(props: CloudKnowledgeBaseCreatorProps) {
     const { connectorCodeData, fileName, targetLineRange, onNodeReady } = props;
     const { rpcClient } = useRpcContext();
-    const { platformRpcClient, platformExtState } = usePlatformExtContext();
     const [loading, setLoading] = useState(false);
 
     const startPosition = targetLineRange?.startLine || { line: 0, offset: 0 };
@@ -67,32 +63,6 @@ export function CloudKnowledgeBaseCreator(props: CloudKnowledgeBaseCreatorProps)
         }
     };
 
-    const handleSelectExisting = async (item: MarketplaceItem) => {
-        setLoading(true);
-        try {
-            const { projectPath } = await rpcClient.getVisualizerLocation();
-            const node = await prepareDevantKnowledgeBase({
-                rpcClient,
-                platformRpcClient,
-                platformExtState,
-                item,
-                node: { codedata: connectorCodeData, metadata: { label: item.name, description: "" }, enabled: true } as AvailableNode,
-                projectPath,
-                target: startPosition,
-                fileName,
-            });
-            if (!node) {
-                await showError("Could not connect to that knowledge base. Please try again.");
-                return;
-            }
-            onNodeReady(node);
-        } catch (error) {
-            console.error(">>> Error setting up WSO2 Cloud knowledge base", error);
-            await showError("Could not connect to that knowledge base. Please try again.");
-        } finally {
-            setLoading(false);
-        }
-    };
 
     if (loading) {
         return (
@@ -102,5 +72,5 @@ export function CloudKnowledgeBaseCreator(props: CloudKnowledgeBaseCreatorProps)
         );
     }
 
-    return <CloudKnowledgeBasePage inset onCreateNew={handleCreateNew} onSelectExisting={handleSelectExisting} />;
+    return <CloudKnowledgeBasePage onCreateNew={handleCreateNew} />;
 }
