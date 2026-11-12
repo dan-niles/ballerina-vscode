@@ -19,7 +19,7 @@
 import type { Component, Environment } from "@wso2/wso2-cloud-client";
 import { ConnectionDetailed, ConnectionListItem, CreateDatabaseConnectionReq, CreateLocalConnectionsConfigReq, CreateThirdPartyConnectionReq, DatabaseCredential, DeleteLocalConnectionsConfigReq, GetComponentsReq, GetConnectionItemReq, GetConnectionsReq, GetDatabaseItemReq, GetDatabaseServerReq, GetMarketplaceIdlReq, GetMarketplaceItemReq, GetMarketplaceListReq,GetProjectEnvsReq,MarketplaceDatabaseListResp,MarketplaceIdlResp,MarketplaceItem,MarketplaceListResp, ResolveConnectionSecretsReq, ResolveConnectionSecretsResp } from "@wso2/wso2-platform-core"
 import { NotificationType, RequestType } from "vscode-messenger-common";
-import { AddDevantTempConfigReq, AddDevantTempConfigResp, CreateInternalConnectionReq, DeleteDevantTempConfigReq, GenerateCustomConnectorFromOASReq, GenerateCustomConnectorFromOASResp, InitializeDevantOASConnectionReq, InitializeDevantOASConnectionResp, PlatformExtState, RegisterDevantMarketplaceServiceReq, ReplaceDevantTempConfigValuesReq } from "./interfaces";
+import { CloudDeployActionRequest, CloudDeployForm, CloudDeployRequest, CloudDeployResponse, CloudDeploySourceCheck, CloudDeployStatus, AddDevantTempConfigReq, AddDevantTempConfigResp, CreateInternalConnectionReq, DeleteDevantTempConfigReq, GenerateCustomConnectorFromOASReq, GenerateCustomConnectorFromOASResp, InitializeDevantOASConnectionReq, InitializeDevantOASConnectionResp, PlatformExtState, RegisterDevantMarketplaceServiceReq, ReplaceDevantTempConfigValuesReq } from "./interfaces";
 
 const _preFix = "platform-ext";
 // BI ext handlers
@@ -53,6 +53,11 @@ export const deleteLocalConnectionsConfig: RequestType<DeleteLocalConnectionsCon
 export const getDevantConsoleUrl: RequestType<void,  string> = { method: `${_preFix}/getDevantConsoleUrl` };
 export const refreshConnectionList: RequestType<void,  void> = { method: `${_preFix}/refreshConnectionList` };
 export const getProjectEnvs: RequestType<GetProjectEnvsReq,  Environment[]> = { method: `${_preFix}/getProjectEnvs` };
+export const getCloudDeployStatus: RequestType<{ projectPath: string; preparation?: boolean }, CloudDeployStatus> = { method: `${_preFix}/getCloudDeployStatus` };
+export const getCloudDeployForm: RequestType<{ projectPath: string; agent?: boolean }, CloudDeployForm> = { method: `${_preFix}/getCloudDeployForm` };
+export const inspectCloudDeploySource: RequestType<{ projectPath: string; gitRemote?: string; branch?: string }, CloudDeploySourceCheck> = { method: `${_preFix}/inspectCloudDeploySource` };
+export const startCloudDeploy: RequestType<CloudDeployRequest, CloudDeployResponse> = { method: `${_preFix}/startCloudDeploy` };
+export const runCloudDeployAction: RequestType<CloudDeployActionRequest, CloudDeployResponse> = { method: `${_preFix}/runCloudDeployAction` };
 export const deployIntegrationInDevant: RequestType<void,  void> = { method: `${_preFix}/deployIntegrationInDevant` };
 export const createConnectionConfig: RequestType<CreateLocalConnectionsConfigReq, string> = { method: `${_preFix}/createConnectionConfig` };
 export const resolveConnectionSecrets: RequestType<ResolveConnectionSecretsReq,  ResolveConnectionSecretsResp> = { method: `${_preFix}/resolveConnectionSecrets` };
