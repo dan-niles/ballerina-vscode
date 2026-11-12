@@ -90,7 +90,7 @@ export interface AgentConfigInput {
     env: EnvNames;
 }
 
-const envVariables = (env: EnvNames) =>
+export const envVariables = (env: EnvNames) =>
     [{ key: "url", name: env.url }, ...(env.apikey ? [{ key: "apikey", name: env.apikey }] : [])];
 
 interface FileMountInput {
