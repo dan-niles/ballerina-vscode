@@ -242,13 +242,12 @@ export function SessionOverview({ sessionTraces, sessionId, onSelectTrace, onExp
     // Extract trace row data
     const traceRows: TraceRowData[] = useMemo(() => {
         return sessionTraces.map(trace => {
-            // Find the invoke_agent span
-            const invokeSpan = trace.spans.find(span => {
-                const operationName = getAttributeValue(span.attributes, 'gen_ai.operation.name');
-                return operationName?.startsWith('invoke_agent');
-            });
+            // Spans arrive as they end, so a sub-agent's invoke_agent comes before its caller's; the root starts first
+            const byStart = [...trace.spans].sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+            const invokeSpan = byStart.find(span =>
+                getAttributeValue(span.attributes, 'gen_ai.operation.name')?.startsWith('invoke_agent'));
 
-            const timestamp = trace.firstSeen;
+            const timestamp = byStart[0]?.startTime || trace.firstSeen;
             const userMessage = invokeSpan ? extractUserMessage(invokeSpan) : '';
             const agentResponse = invokeSpan ? extractAgentResponse(invokeSpan) : '';
 

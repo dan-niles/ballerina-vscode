@@ -207,19 +207,22 @@ export type TraceAnimationEntry = {
     type: 'invoke_agent' | 'chat' | 'execute_tool';
     toolName?: string;
     toolKitName?: string;
+    // The owning agent's prompt; nested agents share this state, so entries are matched per agent
+    systemInstructions?: string;
+    agentToolNames: string[];
     phase: AnimationPhase;
 };
 
+type TraceAnimationEntryRef = Pick<TraceAnimationEntry, 'type' | 'toolName' | 'systemInstructions'>;
+
 export type TraceAnimationState = {
-    activeAgentToolNames: string[];
     entries: TraceAnimationEntry[];
-    systemInstructions?: string;
     entrypointServiceName?: string;
     entrypointFunctionName?: string;
 } | undefined;
 
 const FADE_OUT_DURATION_MS = 400;
-const STALE_ENTRY_TIMEOUT_MS = 10_000; // Safety: auto-deactivate entries older than 10s
+const STALE_ENTRY_TIMEOUT_MS = 60_000; // Safety: auto-deactivate entries older than 60s
 
 let traceAnimationState: TraceAnimationState = undefined;
 const traceAnimationListeners = new Set<() => void>();
@@ -239,15 +242,15 @@ function notifyListeners() {
     traceAnimationListeners.forEach(l => { l(); });
 }
 
-function entryKey(type: string, toolName?: string): string {
-    return toolName ? `${type}:${toolName}` : type;
+function entryKey(entry: TraceAnimationEntryRef): string {
+    return `${entry.type}:${entry.toolName ?? ''}:${entry.systemInstructions ?? ''}`;
 }
 
 function cleanupFadedEntries(keyToClean: string) {
     fadeOutTimers.delete(keyToClean);
     if (!traceAnimationState) return;
     const remaining = traceAnimationState.entries.filter(
-        e => !(entryKey(e.type, e.toolName) === keyToClean && e.phase === 'fading-out')
+        e => !(entryKey(e) === keyToClean && e.phase === 'fading-out')
     );
     if (remaining.length === 0) {
         traceAnimationState = undefined;
@@ -257,7 +260,13 @@ function cleanupFadedEntries(keyToClean: string) {
     notifyListeners();
 }
 
-function scheduleStaleCleanup(key: string, type: TraceAnimationEntry['type'], toolName?: string) {
+function scheduleFadeOut(key: string) {
+    if (!fadeOutTimers.has(key)) {
+        fadeOutTimers.set(key, setTimeout(() => cleanupFadedEntries(key), FADE_OUT_DURATION_MS));
+    }
+}
+
+function scheduleStaleCleanup(key: string, entry: TraceAnimationEntryRef) {
     const existing = staleTimers.get(key);
     if (existing) {
         clearTimeout(existing);
@@ -265,7 +274,7 @@ function scheduleStaleCleanup(key: string, type: TraceAnimationEntry['type'], to
     staleTimers.set(key, setTimeout(() => {
         staleTimers.delete(key);
         // Force-deactivate if still active
-        setTraceAnimationInactive(type, toolName);
+        setTraceAnimationInactive(entry.type, entry.toolName, entry.systemInstructions);
     }, STALE_ENTRY_TIMEOUT_MS));
 }
 
@@ -277,6 +286,13 @@ function clearStaleTimer(key: string) {
     }
 }
 
+// A new chat ends the same agent's tool calls; a new chat or run replaces the same agent's previous one
+function isSupersededBy(entry: TraceAnimationEntry, next: TraceAnimationEntry): boolean {
+    const replacesTool = next.type === 'chat' && entry.type === 'execute_tool';
+    const replacesTurn = next.type !== 'execute_tool' && entry.type === next.type;
+    return entry.phase === 'active' && entry.systemInstructions === next.systemInstructions && (replacesTool || replacesTurn);
+}
+
 export function setTraceAnimationActive(
     toolNames: string[],
     type: 'invoke_agent' | 'chat' | 'execute_tool',
@@ -286,7 +302,15 @@ export function setTraceAnimationActive(
     entrypointFunctionName?: string,
     activeToolKitName?: string,
 ) {
-    const key = entryKey(type, activeToolName);
+    const next: TraceAnimationEntry = {
+        type,
+        toolName: activeToolName,
+        toolKitName: activeToolKitName,
+        systemInstructions,
+        agentToolNames: toolNames,
+        phase: 'active',
+    };
+    const key = entryKey(next);
 
     // Clear any pending fade-out timer for this entry
     const existing = fadeOutTimers.get(key);
@@ -295,42 +319,20 @@ export function setTraceAnimationActive(
         fadeOutTimers.delete(key);
     }
 
-    const prevEntries = traceAnimationState?.entries || [];
-    const activeTools = prevEntries.filter(e => e.type === 'execute_tool' && e.phase === 'active').map(e => e.toolName);
-
-    const updatedEntries = prevEntries
-        .filter(e => entryKey(e.type, e.toolName) !== key) // remove exact duplicate
+    const updatedEntries = (traceAnimationState?.entries || [])
+        .filter(e => entryKey(e) !== key) // remove exact duplicate
         .map(e => {
-            // New chat → fade out all active tools (tools are done, LLM thinking again)
-            if (type === 'chat' && e.type === 'execute_tool' && e.phase === 'active') {
-                const oldKey = entryKey(e.type, e.toolName);
-                if (!fadeOutTimers.has(oldKey)) {
-                    fadeOutTimers.set(oldKey, setTimeout(() => cleanupFadedEntries(oldKey), FADE_OUT_DURATION_MS));
-                }
-                return { ...e, phase: 'fading-out' as const };
+            if (!isSupersededBy(e, next)) {
+                return e;
             }
-            if (type !== 'execute_tool' && e.type === type && e.phase === 'active') {
-                // Same non-tool type, different entry → fade out the old one
-                const oldKey = entryKey(e.type, e.toolName);
-                if (!fadeOutTimers.has(oldKey)) {
-                    fadeOutTimers.set(oldKey, setTimeout(() => cleanupFadedEntries(oldKey), FADE_OUT_DURATION_MS));
-                }
-                return { ...e, phase: 'fading-out' as const };
-            }
-            return e;
+            scheduleFadeOut(entryKey(e));
+            return { ...e, phase: 'fading-out' as const };
         });
-
-    // Add the new active entry
-    updatedEntries.push({ type, toolName: activeToolName, toolKitName: activeToolKitName, phase: 'active' });
-
-    // Schedule stale cleanup for the new active entry
-    scheduleStaleCleanup(key, type, activeToolName);
+    updatedEntries.push(next);
+    scheduleStaleCleanup(key, next);
 
     traceAnimationState = {
-        activeAgentToolNames: toolNames,
         entries: updatedEntries,
-        // Persist systemInstructions from chat events; tool events inherit it
-        systemInstructions: systemInstructions || traceAnimationState?.systemInstructions,
         entrypointServiceName: entrypointServiceName ?? traceAnimationState?.entrypointServiceName,
         entrypointFunctionName: entrypointFunctionName ?? traceAnimationState?.entrypointFunctionName,
     };
@@ -340,15 +342,16 @@ export function setTraceAnimationActive(
 export function setTraceAnimationInactive(
     type: 'invoke_agent' | 'chat' | 'execute_tool',
     activeToolName?: string,
+    systemInstructions?: string,
 ) {
     if (!traceAnimationState) return;
 
-    const key = entryKey(type, activeToolName);
+    const key = entryKey({ type, toolName: activeToolName, systemInstructions });
     clearStaleTimer(key);
 
     // Mark matching entry as fading-out
     const updatedEntries = traceAnimationState.entries.map(e => {
-        if (entryKey(e.type, e.toolName) === key && e.phase === 'active') {
+        if (entryKey(e) === key && e.phase === 'active') {
             return { ...e, phase: 'fading-out' as const };
         }
         return e;
@@ -356,11 +359,7 @@ export function setTraceAnimationInactive(
 
     traceAnimationState = { ...traceAnimationState, entries: updatedEntries };
     notifyListeners();
-
-    // Schedule cleanup
-    if (!fadeOutTimers.has(key)) {
-        fadeOutTimers.set(key, setTimeout(() => cleanupFadedEntries(key), FADE_OUT_DURATION_MS));
-    }
+    scheduleFadeOut(key);
 }
 
 export function useTraceAnimation(): TraceAnimationState {

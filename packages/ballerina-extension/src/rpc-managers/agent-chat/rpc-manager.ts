@@ -43,7 +43,8 @@ import * as vscode from 'vscode';
 import { extension } from '../../BalExtensionContext';
 import { TracerMachine, TraceServer, getActiveTracingProvider } from "../../features/tracing";
 import { TraceDetailsWebview } from "../../features/tracing/trace-details-webview";
-import { Trace } from "../../features/tracing/trace-server";
+import { Span, Trace } from "../../features/tracing/trace-server";
+import { endAgentChatRun, showAgentChatRunStart } from "../../features/tracing/trace-animation";
 import { v4 as uuidv4 } from "uuid";
 import { overrideChatEndpoint, updateChatSessionId } from "../../features/tryit/activator";
 import { StateMachine } from "../../stateMachine";
@@ -90,6 +91,7 @@ export class AgentChatRpcManager implements AgentChatAPI {
                 const payload = { sessionId: extension.agentChatContext.chatSessionId, ...params };
 
                 requestSentAt = new Date();
+                showAgentChatRunStart(extension.agentChatContext.chatEp);
                 const response = await this.fetchTestData(
                     extension.agentChatContext.chatEp,
                     payload,
@@ -166,6 +168,7 @@ export class AgentChatRpcManager implements AgentChatAPI {
 
                 reject(errorWithTrace);
             } finally {
+                endAgentChatRun();
                 // Clear only our own controller: after a Stop, a newer request may own the field.
                 if (this.currentAbortController === controller) {
                     this.currentAbortController = null;
@@ -548,6 +551,8 @@ export class AgentChatRpcManager implements AgentChatAPI {
             return '';
         };
 
+        const spansById = new Map((trace.spans || []).map(span => [span.spanId, span]));
+
         // Iterate through all spans in the trace
         for (const span of trace.spans || []) {
             const attributes = span.attributes || [];
@@ -606,7 +611,9 @@ export class AgentChatRpcManager implements AgentChatAPI {
                 duration,
                 startTime: startTimeISO,
                 endTime: endTimeISO,
-                hasError
+                hasError,
+                depth: Math.max(0, this.agentAncestors(span, spansById).length - 1),
+                delegatesTo: operationType === 'tool' ? this.delegatedAgentName(span, spansById) : undefined
             });
         }
 
@@ -617,6 +624,34 @@ export class AgentChatRpcManager implements AgentChatAPI {
         });
 
         return steps;
+    }
+
+    private agentAncestors(span: Span, spansById: Map<string, Span>): Span[] {
+        const agents: Span[] = [];
+        for (let parent = spansById.get(span.parentSpanId ?? ''); parent; parent = spansById.get(parent.parentSpanId ?? '')) {
+            if (parent.name.startsWith('invoke_agent')) {
+                agents.push(parent);
+            }
+        }
+        return agents;
+    }
+
+    // The agent a tool runs is the first invoke_agent below it, not one nested deeper
+    private delegatedAgentName(toolSpan: Span, spansById: Map<string, Span>): string | undefined {
+        const toolLevel = this.agentAncestors(toolSpan, spansById).length;
+        const agent = [...spansById.values()].find(span =>
+            span.name.startsWith('invoke_agent') && this.isDescendant(span, toolSpan.spanId, spansById)
+            && this.agentAncestors(span, spansById).length === toolLevel);
+        return agent ? this.stripSpanPrefix(agent.name) : undefined;
+    }
+
+    private isDescendant(span: Span, ancestorId: string, spansById: Map<string, Span>): boolean {
+        for (let parent = spansById.get(span.parentSpanId ?? ''); parent; parent = spansById.get(parent.parentSpanId ?? '')) {
+            if (parent.spanId === ancestorId) {
+                return true;
+            }
+        }
+        return false;
     }
 
     async showTraceView(params: TraceInput): Promise<void> {
