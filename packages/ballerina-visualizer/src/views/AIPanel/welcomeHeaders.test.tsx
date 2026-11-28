@@ -34,6 +34,7 @@ let mockMode = "integrator";
 jest.mock("@wso2/ballerina-core", () => ({
     __esModule: true,
     AIMachineEventType: {},
+    ChoreoIcon: (): null => null,
     ProductMode: { BALLERINA: "ballerina", INTEGRATOR: "integrator", AGENT_BUILDER: "agent-builder" },
 }));
 
