@@ -426,6 +426,8 @@ export const FlowNodeForm = forwardRef<FormHandle, FlowNodeFormProps>(function F
     const prevCompletionFetchText = useRef<string>("");
     const [completions, setCompletions] = useState<CompletionItem[]>([]);
     const completionsRef = useRef<CompletionItem[]>([]);
+    // completionNow is not cancelled by a newer request, so only the newest response may publish.
+    const completionsGate = useRef(createRequestGate()).current;
     const [filteredCompletions, setFilteredCompletions] = useState<CompletionItem[]>([]);
     const [types, setTypes] = useState<CompletionItem[]>([]);
     // The last fetched list, set only together with typesCacheKeyRef so the two always describe the same fetch.
@@ -688,9 +690,6 @@ export const FlowNodeForm = forwardRef<FormHandle, FlowNodeFormProps>(function F
     };
 
     const initForm = (node: FlowNode) => {
-        const nodeDiagnostics = nodeOnlyDiagnostics(node);
-        shownNodeErrors.current = new Set(nodeDiagnostics.map((diagnostic) => diagnostic.message));
-        setFormDiagnostics(nodeDiagnostics);
         const formProperties = getFormProperties(node);
         let enrichedNodeProperties;
         if (nodeFormTemplate) {
@@ -764,7 +763,10 @@ export const FlowNodeForm = forwardRef<FormHandle, FlowNodeFormProps>(function F
         fields = normalizeTextFields(fields);
         fields = hideTypeDescriptionField(fields);
 
-        const sortedFields = sortFieldsByPriority(fields);
+        const placed = placeNodeDiagnostics(sortFieldsByPriority(fields), node);
+        shownNodeErrors.current = new Set(placed.shown.map((diagnostic) => diagnostic.message));
+        setFormDiagnostics(placed.formDiagnostics);
+        const sortedFields = placed.fields;
         // `Form` reports every field as changed on first render; the opening values must not count.
         retypedForRef.current = Object.fromEntries(sortedFields.map((field) => [field.key, field.value]));
         // A template still in flight for the node that was open belongs to that node, not this one.
@@ -1175,6 +1177,7 @@ export const FlowNodeForm = forwardRef<FormHandle, FlowNodeFormProps>(function F
             offset: number,
             triggerCharacter?: string
         ) => {
+            const request = completionsGate.begin();
             let expressionCompletions: CompletionItem[] = [];
             const { parentContent, currentContent } = value
                 .slice(0, offset)
@@ -1221,6 +1224,9 @@ export const FlowNodeForm = forwardRef<FormHandle, FlowNodeFormProps>(function F
                         convertedCompletions.push(convertBalCompletion(completion));
                     }
                 });
+                if (!completionsGate.isCurrent(request)) {
+                    return convertedCompletions;
+                }
                 setCompletions(convertedCompletions);
 
                 if (triggerCharacter) {
@@ -1508,7 +1514,7 @@ export const FlowNodeForm = forwardRef<FormHandle, FlowNodeFormProps>(function F
             }
 
             // HACK: Ignore top-level hasDiagnostics when LS sends no diagnostic message. Node-level errors also block,
-            // since a call-wide error sits only on the node and the banner shows it.
+            // since a call-wide error sits only on the node and the banner or the only expression field shows it.
             if (nodeWithDiagnostics?.diagnostics?.hasDiagnostics &&
                 (hasPropertyDiagnosticMessages(nodeWithDiagnostics) || hasNodeErrorMessages(nodeWithDiagnostics))) {
                 return false

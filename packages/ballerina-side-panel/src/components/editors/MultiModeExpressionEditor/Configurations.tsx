@@ -25,6 +25,7 @@ import { tags } from "@lezer/highlight";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { sql } from "@codemirror/lang-sql";
 import { EditorState } from "@codemirror/state";
+import { stringLiteral, stringLiteralText } from "@wso2/ballerina-core";
 
 
 const customSqlHighlightStyle = HighlightStyle.define([
@@ -90,13 +91,10 @@ function isSingleStringLiteral(value: string): boolean {
     return true;
 }
 
-// The text a string literal holds; a template's content is taken as written, so its escapes are resolved here.
+// A literal's text as template content: escapes decoded, and a backtick or `${` interpolated since a template cannot hold it.
 function literalContent(literal: string): string {
-    try {
-        return JSON.parse(literal);
-    } catch {
-        return literal.slice(1, -1);
-    }
+    const text = stringLiteralText(literal) ?? literal.slice(1, -1);
+    return text.replace(/`|\$\{/g, (part) => `\${${stringLiteral(part)}}`);
 }
 
 export class StringTemplateEditorConfig extends ChipExpressionEditorDefaultConfiguration {
@@ -285,7 +283,7 @@ export class NumberExpressionEditorConfig extends ChipExpressionEditorDefaultCon
             tr.changes.iterChanges((_fromA, _toA, _fromB, _toB, text) => { inserts ||= text.length > 0; });
             // A deletion always goes through, so a value that is not a number can still be cleared.
             const accepted = !inserts || this.DECIMAL_INPUT_REGEX.test(tr.newDoc.toString());
-            if (!accepted) {
+            if (!accepted && tr.isUserEvent("input")) {
                 this.onRejectedInput?.();
             }
             return accepted;
