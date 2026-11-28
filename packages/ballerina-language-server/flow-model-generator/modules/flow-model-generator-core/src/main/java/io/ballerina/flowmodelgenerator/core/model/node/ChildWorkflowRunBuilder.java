@@ -136,6 +136,7 @@ public class ChildWorkflowRunBuilder extends NodeBuilder {
                 .stepOut()
                 .addProperty(Property.VARIABLE_KEY);
         WorkflowUtil.addStepIdProperty(this);
+        properties().checkError(!CallBuilder.checkHasNowhereToGo(context), Property.CHECK_ERROR_DOC, false);
     }
 
     @Override

@@ -179,7 +179,7 @@ public abstract class CallBuilder extends NodeBuilder {
     // A call that can fail is checked where its error has somewhere to go; elsewhere its result keeps the error.
     private void setResultProperties(FunctionData functionData, TemplateContext context) {
         boolean keepsError = keepsErrorAt(context, functionData);
-        if (keepsError) {
+        if (keepsError && !functionData.inferredReturnType()) {
             String returnType = functionData.returnType();
             boolean hasValue = !returnType.isBlank() && CommonUtils.hasReturn(returnType);
             String nameFrom = hasValue ? returnType : "error";
@@ -198,8 +198,8 @@ public abstract class CallBuilder extends NodeBuilder {
     }
 
     private boolean keepsErrorAt(TemplateContext context, FunctionData functionData) {
-        return functionData.returnError() && !functionData.inferredReturnType()
-                && CHECKED_BY_POSITION.contains(getFunctionNodeKind()) && checkHasNowhereToGo(context);
+        return functionData.returnError() && CHECKED_BY_POSITION.contains(getFunctionNodeKind())
+                && checkHasNowhereToGo(context);
     }
 
     // Agent templates are cached per agent, so they are unchecked here where the error can't go.

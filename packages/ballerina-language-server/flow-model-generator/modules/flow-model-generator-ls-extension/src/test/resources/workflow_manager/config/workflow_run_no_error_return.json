@@ -1,0 +1,130 @@
+{
+  "source": "workflow_function/no_error.bal",
+  "position": {
+    "line": 1,
+    "offset": 4
+  },
+  "description": "Workflow run node template in a function that returns no error, which leaves the run unchecked",
+  "codedata": {
+    "node": "WORKFLOW_RUN",
+    "org": "test",
+    "module": "workflow_function",
+    "symbol": "orderWorkflow",
+    "version": "0.1.0"
+  },
+  "output": {
+    "id": "31",
+    "metadata": {
+      "label": "Run Workflow",
+      "description": "Run a workflow instance"
+    },
+    "codedata": {
+      "node": "WORKFLOW_RUN",
+      "org": "ballerina",
+      "module": "workflow",
+      "symbol": "orderWorkflow",
+      "version": "0.1.0",
+      "isNew": true
+    },
+    "returning": false,
+    "properties": {
+      "workflow": {
+        "metadata": {
+          "label": "Workflow",
+          "description": "The workflow to start"
+        },
+        "types": [
+          {
+            "fieldType": "SINGLE_SELECT",
+            "options": [
+              {
+                "label": "orderWorkflow",
+                "value": "orderWorkflow"
+              }
+            ],
+            "selected": true
+          }
+        ],
+        "value": "orderWorkflow",
+        "optional": false,
+        "editable": true,
+        "advanced": false,
+        "hidden": false,
+        "codedata": {
+          "kind": "REQUIRED"
+        }
+      },
+      "input": {
+        "metadata": {
+          "label": "Input",
+          "description": "Input data for the workflow"
+        },
+        "types": [
+          {
+            "fieldType": "RECORD_MAP_EXPRESSION",
+            "ballerinaType": "OrderInput",
+            "typeMembers": [
+              {
+                "type": "OrderInput",
+                "packageInfo": "test:workflow_function:0.1.0",
+                "packageName": "workflow_function",
+                "kind": "RECORD_TYPE",
+                "selected": false
+              }
+            ],
+            "selected": false
+          },
+          {
+            "fieldType": "EXPRESSION",
+            "ballerinaType": "OrderInput",
+            "selected": false
+          }
+        ],
+        "value": "",
+        "placeholder": "",
+        "optional": false,
+        "editable": true,
+        "advanced": false,
+        "hidden": false,
+        "codedata": {
+          "dependentProperty": "workflow"
+        }
+      },
+      "variable": {
+        "metadata": {
+          "label": "Workflow ID Variable Name",
+          "description": "Variable name to receive the started workflow ID."
+        },
+        "types": [
+          {
+            "fieldType": "IDENTIFIER",
+            "selected": false
+          }
+        ],
+        "value": "workflowId",
+        "optional": false,
+        "editable": true,
+        "advanced": false,
+        "hidden": false
+      },
+      "checkError": {
+        "metadata": {
+          "label": "Check Error",
+          "description": "Trigger error flow"
+        },
+        "types": [
+          {
+            "fieldType": "FLAG",
+            "selected": true
+          }
+        ],
+        "value": false,
+        "optional": false,
+        "editable": false,
+        "advanced": true,
+        "hidden": true
+      }
+    },
+    "flags": 0
+  }
+}

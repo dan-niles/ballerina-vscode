@@ -165,6 +165,7 @@ public class WorkflowRunBuilder extends NodeBuilder {
                 .editable(true)
                 .stepOut()
                 .addProperty(Property.VARIABLE_KEY);
+        properties().checkError(!CallBuilder.checkHasNowhereToGo(context), Property.CHECK_ERROR_DOC, false);
     }
 
     @Override

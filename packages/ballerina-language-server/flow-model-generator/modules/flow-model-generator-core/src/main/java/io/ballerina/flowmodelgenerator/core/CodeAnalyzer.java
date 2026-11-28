@@ -125,6 +125,7 @@ import io.ballerina.compiler.syntax.tree.Token;
 import io.ballerina.compiler.syntax.tree.TransactionStatementNode;
 import io.ballerina.compiler.syntax.tree.TupleTypeDescriptorNode;
 import io.ballerina.compiler.syntax.tree.TypedBindingPatternNode;
+import io.ballerina.compiler.syntax.tree.UnionTypeDescriptorNode;
 import io.ballerina.compiler.syntax.tree.VariableDeclarationNode;
 import io.ballerina.compiler.syntax.tree.WaitActionNode;
 import io.ballerina.compiler.syntax.tree.WaitFieldsListNode;
@@ -656,6 +657,14 @@ public class CodeAnalyzer extends NodeVisitor {
         dropInferredTypeParameter(props);
         WorkflowUtil.reorderProperties(props, ChildWorkflowRunBuilder.WORKFLOW_NAME_KEY,
                 ChildWorkflowRunBuilder.INPUT_KEY, Property.TYPE_KEY, Property.VARIABLE_KEY, WorkflowUtil.STEP_ID_KEY);
+        markUncheckedStep(callNode);
+    }
+
+    // The templates check a workflow step, so one read without check carries an explicit false.
+    private void markUncheckedStep(NonTerminalNode callNode) {
+        if (!isCheckedCall(callNode)) {
+            nodeBuilder.properties().checkError(false, Property.CHECK_ERROR_DOC, false);
+        }
     }
 
     /**
@@ -671,6 +680,7 @@ public class CodeAnalyzer extends NodeVisitor {
             // waitForChildWorkflow infers its result type; the template offers the field, so the
             // re-read form does too.
             dropInferredTypeParameter(props);
+            markUncheckedStep(callNode);
             return;
         }
         String handle = argumentExpression(callNode.arguments(), 0, ChildWorkflowSendDataBuilder.CHILD_WORKFLOW_ID_KEY)
@@ -3040,6 +3050,19 @@ public class CodeAnalyzer extends NodeVisitor {
         builder.stepOut().addProperty(key);
     }
 
+    // An unchecked wait declares `T|error`; the event is a future of `T`, which the builder widens again.
+    private static Node withoutErrorMember(Node typeDesc) {
+        if (typeDesc instanceof UnionTypeDescriptorNode union) {
+            if (union.rightTypeDesc().kind() == SyntaxKind.ERROR_TYPE_DESC) {
+                return union.leftTypeDesc();
+            }
+            if (union.leftTypeDesc().kind() == SyntaxKind.ERROR_TYPE_DESC) {
+                return union.rightTypeDesc();
+            }
+        }
+        return typeDesc;
+    }
+
     /**
      * Populates DATA_WAITS_KEY property for a simple wait expression (check wait data.dataName).
      */
@@ -3056,6 +3079,9 @@ public class CodeAnalyzer extends NodeVisitor {
             Node typeDesc = typedBindingPatternNode.typeDescriptor();
             boolean isNilable = typeDesc.kind() == SyntaxKind.OPTIONAL_TYPE_DESC;
             Node bareTypeDesc = isNilable ? ((OptionalTypeDescriptorNode) typeDesc).typeDescriptor() : typeDesc;
+            if (!isCheckedCall(waitActionNode)) {
+                bareTypeDesc = withoutErrorMember(bareTypeDesc);
+            }
             String dataType = bareTypeDesc.toSourceCode().strip();
             LineRange dataTypeRange = bareTypeDesc.lineRange();
             buildDataWaitsProperty(List.of(new DataWaitEntry(variableName, dataType, dataName, dataTypeRange)));
@@ -5464,6 +5490,7 @@ public class CodeAnalyzer extends NodeVisitor {
             if (isWorkflowWaitData(waitActionNode)) {
                 startNode(NodeKind.WAIT_DATA, waitActionNode.parent());
                 populateSimpleWaitDataProperties(waitActionNode);
+                markUncheckedStep(waitActionNode);
             } else {
                 startNode(NodeKind.EXPRESSION, waitActionNode)
                         .properties().statement(waitActionNode);

@@ -120,6 +120,8 @@ public class WaitDataBuilder extends CallBuilder {
             Property.TYPE_KEY, Property.CHECK_ERROR_KEY, Property.CONNECTION_KEY);
 
     private static final Gson gson = new Gson();
+    // Every other property is a named argument of `ctx->await`.
+    private static final Set<String> NOT_AWAIT_PARAMS = Set.of(DATA_WAITS_KEY, OPTIONAL_KEY, Property.CHECK_ERROR_KEY);
 
     @Override
     protected NodeKind getFunctionNodeKind() {
@@ -145,7 +147,7 @@ public class WaitDataBuilder extends CallBuilder {
                         DATA_WAITS_DOC, getDataWaitSchema(), false, false);
         addAdvancedProperties(context.workspaceManager().module(context.filePath()).orElse(null),
                 context.workspaceManager(), context.filePath());
-
+        properties().checkError(!CallBuilder.checkHasNowhereToGo(context), Property.CHECK_ERROR_DOC, false);
     }
 
     public void addAdvancedProperties(Module module, WorkspaceManager workspaceManager, Path filePath) {
@@ -322,7 +324,7 @@ public class WaitDataBuilder extends CallBuilder {
         }
         for (Map.Entry<String, Property> entry : properties.entrySet()) {
             String key = entry.getKey();
-            if (key.equals(DATA_WAITS_KEY) || key.equals(OPTIONAL_KEY)) {
+            if (NOT_AWAIT_PARAMS.contains(key)) {
                 continue;
             }
             Property prop = entry.getValue();
@@ -340,7 +342,7 @@ public class WaitDataBuilder extends CallBuilder {
         }
         for (Map.Entry<String, Property> entry : properties.entrySet()) {
             String key = entry.getKey();
-            if (key.equals(DATA_WAITS_KEY) || key.equals(OPTIONAL_KEY)) {
+            if (NOT_AWAIT_PARAMS.contains(key)) {
                 continue;
             }
             Property prop = entry.getValue();

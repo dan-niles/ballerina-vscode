@@ -265,7 +265,9 @@ public class SourceBuilder {
         Property type = optionalType.get();
         String typeName = requalifiedType(type);
         if (flowNode.codedata().inferredReturnType() != null) {
-            typeName = getTypeNameForInferredParam(variable.get(), typeName);
+            // An inferred result type is only known here, so an unchecked call's error is added here too.
+            typeName = FlowNodeUtil.withErrorWhenUnchecked(flowNode,
+                    getTypeNameForInferredParam(variable.get(), typeName));
         }
 
         tokenBuilder.expressionWithType(typeName, variable.get()).keyword(SyntaxKind.EQUAL_TOKEN);
